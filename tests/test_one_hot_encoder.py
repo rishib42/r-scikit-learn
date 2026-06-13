@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from importlib.metadata import version
 
 import numpy as np
 import pytest
@@ -6,6 +7,9 @@ from rsklearn.preprocessing import OneHotEncoder
 
 sklearn_preprocessing = pytest.importorskip("sklearn.preprocessing")
 ScikitOneHotEncoder = sklearn_preprocessing.OneHotEncoder
+SCIKIT_LEARN_VERSION = tuple(
+    int(part) for part in version("scikit-learn").split(".")[:2]
+)
 
 
 @pytest.mark.parametrize(
@@ -67,6 +71,14 @@ def test_unknown_transform_and_inverse_match_scikit_learn(handle_unknown, freque
     context = pytest.warns(UserWarning) if handle_unknown == "warn" else nullcontext()
     with context:
         theirs_encoded = theirs.transform(test)
+    if handle_unknown == "warn" and SCIKIT_LEARN_VERSION < (1, 8):
+        # scikit-learn 1.8 changed "warn" to encode unknowns as infrequent.
+        np.testing.assert_array_equal(ours_encoded.toarray(), [[1, 0], [0, 1]])
+        np.testing.assert_array_equal(
+            ours.inverse_transform(ours_encoded), [["a"], ["infrequent_sklearn"]]
+        )
+        np.testing.assert_array_equal(theirs_encoded.toarray(), [[1, 0], [0, 0]])
+        return
     np.testing.assert_array_equal(ours_encoded.toarray(), theirs_encoded.toarray())
     np.testing.assert_array_equal(
         ours.inverse_transform(ours_encoded), theirs.inverse_transform(theirs_encoded)
