@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod categorical;
 mod error;
 mod label_encoder;
 mod minmax_scaler;
@@ -9,7 +10,8 @@ mod standard_scaler;
 
 use numpy::ndarray::Array2;
 use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
+    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3,
+    PyUntypedArrayMethods,
 };
 use pyo3::prelude::*;
 
@@ -25,6 +27,8 @@ type StandardFitOutput<'py> = (
     Bound<'py, PyArray1<i64>>,
 );
 type ThreeFloatArrays<'py> = (FloatArray1<'py>, FloatArray1<'py>, FloatArray1<'py>);
+type FloatCategoryOutput<'py> = (FloatArray1<'py>, IntArray1<'py>);
+type CategoryMatrixOutput<'py, T> = (Vec<Vec<T>>, Bound<'py, PyArray2<i64>>);
 
 fn array2_output<'py>(
     py: Python<'py>,
@@ -43,6 +47,17 @@ fn array2_output_f32<'py>(
     rows: usize,
     cols: usize,
 ) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let array = Array2::from_shape_vec((rows, cols), values)
+        .map_err(|_| error::CoreError::ShapeMismatch)?;
+    Ok(array.into_pyarray(py))
+}
+
+fn array2_output_i64<'py>(
+    py: Python<'py>,
+    values: Vec<i64>,
+    rows: usize,
+    cols: usize,
+) -> PyResult<Bound<'py, PyArray2<i64>>> {
     let array = Array2::from_shape_vec((rows, cols), values)
         .map_err(|_| error::CoreError::ShapeMismatch)?;
     Ok(array.into_pyarray(py))
@@ -289,6 +304,213 @@ fn robust_transform_f32<'py>(
 }
 
 #[pyfunction]
+fn category_discover_f64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+) -> PyResult<FloatCategoryOutput<'py>> {
+    let values = values.as_slice()?;
+    let (categories, encoded) = py.detach(|| categorical::discover_numeric(values));
+    Ok((categories.into_pyarray(py), encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn category_discover_matrix_f64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray2<'py, f64>,
+) -> PyResult<CategoryMatrixOutput<'py, f64>> {
+    let shape = values.shape();
+    let values = values.as_slice()?;
+    let (categories, encoded) =
+        py.detach(|| categorical::discover_numeric_matrix(values, shape[0], shape[1]))?;
+    Ok((
+        categories,
+        array2_output_i64(py, encoded, shape[0], shape[1])?,
+    ))
+}
+
+#[pyfunction]
+fn category_encode_f64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    categories: PyReadonlyArray1<'py, f64>,
+) -> PyResult<IntArray1<'py>> {
+    let values = values.as_slice()?;
+    let categories = categories.as_slice()?;
+    let encoded = py.detach(|| categorical::encode_numeric(values, categories));
+    Ok(encoded.into_pyarray(py))
+}
+
+#[pyfunction]
+fn category_discover_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, i64>,
+) -> PyResult<IntLabelOutput<'py>> {
+    let values = values.as_slice()?;
+    let (categories, encoded) = py.detach(|| categorical::discover_ordered(values));
+    Ok((categories.into_pyarray(py), encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn category_discover_matrix_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray2<'py, i64>,
+) -> PyResult<CategoryMatrixOutput<'py, i64>> {
+    let shape = values.shape();
+    let values = values.as_slice()?;
+    let (categories, encoded) =
+        py.detach(|| categorical::discover_ordered_matrix(values, shape[0], shape[1]))?;
+    Ok((
+        categories,
+        array2_output_i64(py, encoded, shape[0], shape[1])?,
+    ))
+}
+
+#[pyfunction]
+fn category_encode_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, i64>,
+    categories: PyReadonlyArray1<'py, i64>,
+) -> PyResult<IntArray1<'py>> {
+    let values = values.as_slice()?;
+    let categories = categories.as_slice()?;
+    let encoded = py.detach(|| categorical::encode_ordered(values, categories));
+    Ok(encoded.into_pyarray(py))
+}
+
+#[pyfunction]
+fn category_discover_u64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, u64>,
+) -> PyResult<UIntLabelOutput<'py>> {
+    let values = values.as_slice()?;
+    let (categories, encoded) = py.detach(|| categorical::discover_ordered(values));
+    Ok((categories.into_pyarray(py), encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn category_discover_matrix_u64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray2<'py, u64>,
+) -> PyResult<CategoryMatrixOutput<'py, u64>> {
+    let shape = values.shape();
+    let values = values.as_slice()?;
+    let (categories, encoded) =
+        py.detach(|| categorical::discover_ordered_matrix(values, shape[0], shape[1]))?;
+    Ok((
+        categories,
+        array2_output_i64(py, encoded, shape[0], shape[1])?,
+    ))
+}
+
+#[pyfunction]
+fn category_encode_u64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, u64>,
+    categories: PyReadonlyArray1<'py, u64>,
+) -> PyResult<IntArray1<'py>> {
+    let values = values.as_slice()?;
+    let categories = categories.as_slice()?;
+    let encoded = py.detach(|| categorical::encode_ordered(values, categories));
+    Ok(encoded.into_pyarray(py))
+}
+
+#[pyfunction]
+fn category_discover_bool<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, bool>,
+) -> PyResult<(Bound<'py, PyArray1<bool>>, IntArray1<'py>)> {
+    let values = values.as_slice()?;
+    let (categories, encoded) = py.detach(|| categorical::discover_ordered(values));
+    Ok((categories.into_pyarray(py), encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn category_discover_matrix_bool<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray2<'py, bool>,
+) -> PyResult<CategoryMatrixOutput<'py, bool>> {
+    let shape = values.shape();
+    let values = values.as_slice()?;
+    let (categories, encoded) =
+        py.detach(|| categorical::discover_ordered_matrix(values, shape[0], shape[1]))?;
+    Ok((
+        categories,
+        array2_output_i64(py, encoded, shape[0], shape[1])?,
+    ))
+}
+
+#[pyfunction]
+fn category_encode_bool<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, bool>,
+    categories: PyReadonlyArray1<'py, bool>,
+) -> PyResult<IntArray1<'py>> {
+    let values = values.as_slice()?;
+    let categories = categories.as_slice()?;
+    let encoded = py.detach(|| categorical::encode_ordered(values, categories));
+    Ok(encoded.into_pyarray(py))
+}
+
+#[pyfunction]
+fn category_discover_strings<'py>(
+    py: Python<'py>,
+    values: Vec<String>,
+) -> (Vec<String>, IntArray1<'py>) {
+    let (categories, encoded) = py.detach(|| categorical::discover_strings(&values));
+    (categories, encoded.into_pyarray(py))
+}
+
+#[pyfunction]
+fn category_encode_strings<'py>(
+    py: Python<'py>,
+    values: Vec<String>,
+    categories: Vec<String>,
+) -> IntArray1<'py> {
+    py.detach(|| categorical::encode_strings(&values, &categories))
+        .into_pyarray(py)
+}
+
+#[pyfunction]
+fn category_discover_unicode<'py>(
+    py: Python<'py>,
+    codepoints: PyReadonlyArray2<'py, u32>,
+) -> PyResult<(Vec<String>, IntArray1<'py>)> {
+    let shape = codepoints.shape();
+    let values = codepoints.as_slice()?;
+    let (categories, encoded) =
+        py.detach(|| categorical::discover_unicode(values, shape[0], shape[1]))?;
+    Ok((categories, encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn category_discover_matrix_unicode<'py>(
+    py: Python<'py>,
+    codepoints: PyReadonlyArray3<'py, u32>,
+) -> PyResult<CategoryMatrixOutput<'py, String>> {
+    let shape = codepoints.shape();
+    let values = codepoints.as_slice()?;
+    let (categories, encoded) =
+        py.detach(|| categorical::discover_unicode_matrix(values, shape[0], shape[1], shape[2]))?;
+    Ok((
+        categories,
+        array2_output_i64(py, encoded, shape[0], shape[1])?,
+    ))
+}
+
+#[pyfunction]
+fn category_encode_unicode<'py>(
+    py: Python<'py>,
+    codepoints: PyReadonlyArray2<'py, u32>,
+    categories: Vec<String>,
+) -> PyResult<IntArray1<'py>> {
+    let shape = codepoints.shape();
+    let values = codepoints.as_slice()?;
+    let encoded =
+        py.detach(|| categorical::encode_unicode(values, shape[0], shape[1], &categories))?;
+    Ok(encoded.into_pyarray(py))
+}
+
+#[pyfunction]
 fn label_fit_transform_numeric<'py>(
     py: Python<'py>,
     values: Vec<f64>,
@@ -457,6 +679,23 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(robust_fit, module)?)?;
     module.add_function(wrap_pyfunction!(robust_transform_f64, module)?)?;
     module.add_function(wrap_pyfunction!(robust_transform_f32, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_matrix_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_encode_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_matrix_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_encode_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_u64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_matrix_u64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_encode_u64, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_bool, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_matrix_bool, module)?)?;
+    module.add_function(wrap_pyfunction!(category_encode_bool, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_strings, module)?)?;
+    module.add_function(wrap_pyfunction!(category_encode_strings, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_unicode, module)?)?;
+    module.add_function(wrap_pyfunction!(category_discover_matrix_unicode, module)?)?;
+    module.add_function(wrap_pyfunction!(category_encode_unicode, module)?)?;
     module.add_function(wrap_pyfunction!(label_fit_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_inverse_numeric, module)?)?;

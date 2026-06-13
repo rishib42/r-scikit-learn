@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import numpy as np
 from rsklearn._validation import validate_numeric_2d
+from rsklearn.base import BaseEstimator
 from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
@@ -16,11 +17,13 @@ from rsklearn.preprocessing import (
     RobustScaler,
     StandardScaler,
 )
+from rsklearn.preprocessing._categorical import discover_categories, encode_categories
 
 # The scikit-learn distribution intentionally exposes the `sklearn` import package.
 from sklearn.preprocessing import LabelEncoder as ScikitLabelEncoder
 from sklearn.preprocessing import MinMaxScaler as ScikitMinMaxScaler
 from sklearn.preprocessing import Normalizer as ScikitNormalizer
+from sklearn.preprocessing import OrdinalEncoder as ScikitOrdinalEncoder
 from sklearn.preprocessing import RobustScaler as ScikitRobustScaler
 from sklearn.preprocessing import StandardScaler as ScikitStandardScaler
 
@@ -141,6 +144,40 @@ def benchmark_labels(repetitions: int) -> None:
         )
 
 
+class _CategoricalBenchmarkEstimator(BaseEstimator):
+    pass
+
+
+def benchmark_categories(repetitions: int) -> None:
+    rng = np.random.default_rng(42)
+    numeric = rng.integers(0, 1_000, size=(100_000, 4), dtype=np.int64)
+    strings = np.asarray(
+        [[f"category-{value}" for value in row] for row in numeric],
+        dtype=str,
+    )
+    print("\nCategorical matrix: 100,000 x 4")
+    for category_type, X in [("numeric", numeric), ("unicode", strings)]:
+        ours_estimator = _CategoricalBenchmarkEstimator()
+        state, _ = discover_categories(X, estimator=ours_estimator)
+        theirs = ScikitOrdinalEncoder().fit(X)
+        report_comparison(
+            f"Category discovery + encoding {category_type}",
+            lambda values=X: discover_categories(
+                values, estimator=_CategoricalBenchmarkEstimator()
+            ),
+            lambda values=X: ScikitOrdinalEncoder().fit_transform(values),
+            repetitions,
+        )
+        report_comparison(
+            f"Category lookup {category_type}",
+            lambda values=X, learned=state, estimator=ours_estimator: encode_categories(
+                values, learned, estimator=estimator
+            ),
+            lambda values=X, encoder=theirs: encoder.transform(values),
+            repetitions,
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repetitions", type=int, default=5)
@@ -151,6 +188,7 @@ def main() -> None:
     if args.include_largest:
         benchmark_matrix(1_000_000, 10, args.repetitions)
     benchmark_labels(args.repetitions)
+    benchmark_categories(args.repetitions)
     print(
         "\nTimes include Python-to-Rust validation/conversion for "
         "r-scikit-learn public API calls. Positive improvement means "

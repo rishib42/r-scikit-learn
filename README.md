@@ -105,6 +105,10 @@ pass scikit-learn's official estimator checks.
 
 Contiguous NumPy Unicode arrays are exposed to safe Rust as fixed-width
 codepoint rows, avoiding per-label Python string conversion in the hot path.
+The internal categorical layer also provides per-feature numeric, boolean, and
+Unicode discovery and lookup kernels, exact large-integer handling, missing
+categories, unknown masks, mixed-type validation, and feature-name checks for
+future categorical encoders.
 
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is
