@@ -35,10 +35,10 @@ def validate_numeric_2d(
     return validate_numeric_2d_with_dtype(X, estimator=estimator, reset=reset)[0]
 
 
-def validate_normalizer_2d(
-    X: Any, *, estimator: Any, reset: bool, copy: bool
+def validate_preserving_float_2d(
+    X: Any, *, estimator: Any, reset: bool, copy: bool, allow_nan: bool
 ) -> NDArray[np.float32] | NDArray[np.float64]:
-    """Return finite contiguous float32 or float64 input for Normalizer."""
+    """Return contiguous float32 or float64 input while preserving float32."""
     array = validate_data(
         estimator,
         X,
@@ -46,13 +46,22 @@ def validate_normalizer_2d(
         dtype="numeric",
         order="C",
         copy=copy,
-        ensure_all_finite=True,
+        ensure_all_finite="allow-nan" if allow_nan else True,
     )
     dtype = np.float32 if array.dtype == np.dtype(np.float32) else np.float64
     try:
         return np.ascontiguousarray(array, dtype=dtype)
     except (TypeError, ValueError) as error:
         raise TypeError(f"{type(estimator).__name__} requires numeric input") from error
+
+
+def validate_normalizer_2d(
+    X: Any, *, estimator: Any, reset: bool, copy: bool
+) -> NDArray[np.float32] | NDArray[np.float64]:
+    """Return finite contiguous float32 or float64 input for Normalizer."""
+    return validate_preserving_float_2d(
+        X, estimator=estimator, reset=reset, copy=copy, allow_nan=False
+    )
 
 
 def check_feature_count(

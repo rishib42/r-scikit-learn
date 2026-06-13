@@ -4,6 +4,7 @@ mod error;
 mod label_encoder;
 mod minmax_scaler;
 mod normalizer;
+mod robust_scaler;
 mod standard_scaler;
 
 use numpy::ndarray::Array2;
@@ -200,6 +201,94 @@ fn normalize_f32<'py>(
 }
 
 #[pyfunction]
+#[pyo3(signature = (input, quantile_low, quantile_high, with_centering, with_scaling))]
+fn robust_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    quantile_low: f64,
+    quantile_high: f64,
+    with_centering: bool,
+    with_scaling: bool,
+) -> PyResult<(FloatArray1<'py>, FloatArray1<'py>)> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let stats = py.detach(|| {
+        robust_scaler::fit(
+            values,
+            shape[0],
+            shape[1],
+            quantile_low,
+            quantile_high,
+            with_centering,
+            with_scaling,
+        )
+    })?;
+    Ok((stats.center.into_pyarray(py), stats.scale.into_pyarray(py)))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, center, scale, with_centering, with_scaling, inverse=false))]
+#[allow(clippy::too_many_arguments)]
+fn robust_transform_f64<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    center: PyReadonlyArray1<'py, f64>,
+    scale: PyReadonlyArray1<'py, f64>,
+    with_centering: bool,
+    with_scaling: bool,
+    inverse: bool,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = input.shape();
+    let input = input.as_slice()?;
+    let center = center.as_slice()?;
+    let scale = scale.as_slice()?;
+    let output = py.detach(|| {
+        robust_scaler::transform_f64(
+            input,
+            shape[0],
+            shape[1],
+            center,
+            scale,
+            with_centering,
+            with_scaling,
+            inverse,
+        )
+    })?;
+    array2_output(py, output, shape[0], shape[1])
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, center, scale, with_centering, with_scaling, inverse=false))]
+#[allow(clippy::too_many_arguments)]
+fn robust_transform_f32<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f32>,
+    center: PyReadonlyArray1<'py, f64>,
+    scale: PyReadonlyArray1<'py, f64>,
+    with_centering: bool,
+    with_scaling: bool,
+    inverse: bool,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let shape = input.shape();
+    let input = input.as_slice()?;
+    let center = center.as_slice()?;
+    let scale = scale.as_slice()?;
+    let output = py.detach(|| {
+        robust_scaler::transform_f32(
+            input,
+            shape[0],
+            shape[1],
+            center,
+            scale,
+            with_centering,
+            with_scaling,
+            inverse,
+        )
+    })?;
+    array2_output_f32(py, output, shape[0], shape[1])
+}
+
+#[pyfunction]
 fn label_fit_transform_numeric<'py>(
     py: Python<'py>,
     values: Vec<f64>,
@@ -365,6 +454,9 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(minmax_transform, module)?)?;
     module.add_function(wrap_pyfunction!(normalize_f64, module)?)?;
     module.add_function(wrap_pyfunction!(normalize_f32, module)?)?;
+    module.add_function(wrap_pyfunction!(robust_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(robust_transform_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(robust_transform_f32, module)?)?;
     module.add_function(wrap_pyfunction!(label_fit_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_inverse_numeric, module)?)?;

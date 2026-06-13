@@ -4,6 +4,7 @@ from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
     Normalizer,
+    RobustScaler,
     StandardScaler,
 )
 
@@ -12,6 +13,7 @@ scikit_learn_preprocessing = pytest.importorskip("sklearn.preprocessing")
 ScikitLabelEncoder = scikit_learn_preprocessing.LabelEncoder
 ScikitMinMaxScaler = scikit_learn_preprocessing.MinMaxScaler
 ScikitNormalizer = scikit_learn_preprocessing.Normalizer
+ScikitRobustScaler = scikit_learn_preprocessing.RobustScaler
 ScikitStandardScaler = scikit_learn_preprocessing.StandardScaler
 
 
@@ -112,6 +114,47 @@ def test_normalizer_extreme_value_parity(norm):
         ScikitNormalizer(norm=norm).fit_transform(X),
         equal_nan=True,
     )
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"with_centering": False},
+        {"with_scaling": False},
+        {"with_centering": False, "with_scaling": False},
+        {"quantile_range": (10.0, 90.0)},
+        {"unit_variance": True},
+    ],
+)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_robust_scaler_parity(options, dtype):
+    rng = np.random.default_rng(20260613)
+    X = rng.standard_t(df=2, size=(251, 12)).astype(dtype)
+    X[0, 0] = np.nan
+    ours = RobustScaler(**options).fit(X)
+    theirs = ScikitRobustScaler(**options).fit(X)
+    if ours.center_ is not None:
+        np.testing.assert_allclose(ours.center_, theirs.center_, rtol=1e-6)
+    if ours.scale_ is not None:
+        np.testing.assert_allclose(ours.scale_, theirs.scale_, rtol=1e-12)
+    ours_transformed = ours.transform(X)
+    theirs_transformed = theirs.transform(X)
+    assert ours_transformed.dtype == theirs_transformed.dtype == dtype
+    np.testing.assert_allclose(
+        ours_transformed, theirs_transformed, rtol=1e-5, atol=1e-6, equal_nan=True
+    )
+
+
+@pytest.mark.parametrize("quantile_range", [(0.0, 100.0), (50.0, 50.0), (5.0, 95.0)])
+def test_robust_scaler_unit_variance_extreme_quantile_parity(quantile_range):
+    X = np.asarray([[1.0], [2.0], [4.0], [100.0]])
+    with np.errstate(all="ignore"):
+        ours = RobustScaler(quantile_range=quantile_range, unit_variance=True).fit(X)
+        theirs = ScikitRobustScaler(
+            quantile_range=quantile_range, unit_variance=True
+        ).fit(X)
+    np.testing.assert_allclose(ours.scale_, theirs.scale_)
 
 
 @pytest.mark.parametrize(

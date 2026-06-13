@@ -16,6 +16,8 @@ pub enum CoreError {
     InvalidUnicode(u32),
     #[error("unsupported normalization norm: {0}")]
     InvalidNorm(String),
+    #[error("invalid quantile range: ({0}, {1})")]
+    InvalidQuantileRange(f64, f64),
 }
 
 impl From<CoreError> for PyErr {

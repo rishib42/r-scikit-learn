@@ -7,7 +7,13 @@ from .base import (
     TransformerMixin,
     clone,
 )
-from .preprocessing import LabelEncoder, MinMaxScaler, Normalizer, StandardScaler
+from .preprocessing import (
+    LabelEncoder,
+    MinMaxScaler,
+    Normalizer,
+    RobustScaler,
+    StandardScaler,
+)
 
 __all__ = [
     "BaseEstimator",
@@ -16,6 +22,7 @@ __all__ = [
     "MinMaxScaler",
     "Normalizer",
     "RegressorMixin",
+    "RobustScaler",
     "StandardScaler",
     "TransformerMixin",
     "clone",

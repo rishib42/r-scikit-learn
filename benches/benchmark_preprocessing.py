@@ -13,6 +13,7 @@ from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
     Normalizer,
+    RobustScaler,
     StandardScaler,
 )
 
@@ -20,6 +21,7 @@ from rsklearn.preprocessing import (
 from sklearn.preprocessing import LabelEncoder as ScikitLabelEncoder
 from sklearn.preprocessing import MinMaxScaler as ScikitMinMaxScaler
 from sklearn.preprocessing import Normalizer as ScikitNormalizer
+from sklearn.preprocessing import RobustScaler as ScikitRobustScaler
 from sklearn.preprocessing import StandardScaler as ScikitStandardScaler
 
 
@@ -76,6 +78,7 @@ def benchmark_matrix(rows: int, columns: int, repetitions: int) -> None:
         ("StandardScaler", StandardScaler, ScikitStandardScaler),
         ("MinMaxScaler", MinMaxScaler, ScikitMinMaxScaler),
         ("Normalizer", Normalizer, ScikitNormalizer),
+        ("RobustScaler", RobustScaler, ScikitRobustScaler),
     ]:
         ours_fitted = ours().fit(X)
         theirs_fitted = theirs().fit(X)
@@ -104,6 +107,14 @@ def benchmark_matrix(rows: int, columns: int, repetitions: int) -> None:
         "Normalizer float32 transform",
         lambda: ours_float32.transform(X_float32),
         lambda: theirs_float32.transform(X_float32),
+        repetitions,
+    )
+    ours_robust_float32 = RobustScaler().fit(X_float32)
+    theirs_robust_float32 = ScikitRobustScaler().fit(X_float32)
+    report_comparison(
+        "RobustScaler float32 transform",
+        lambda: ours_robust_float32.transform(X_float32),
+        lambda: theirs_robust_float32.transform(X_float32),
         repetitions,
     )
 

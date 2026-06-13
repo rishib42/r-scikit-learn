@@ -2,7 +2,8 @@
 
 `r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
 computational core and lightweight Python estimator classes. Version 0.1.0
-provides `StandardScaler`, `MinMaxScaler`, `Normalizer`, and `LabelEncoder`.
+provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
+`LabelEncoder`.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -66,18 +67,29 @@ from rsklearn.preprocessing import Normalizer
 X_normalized = Normalizer(norm="l2").fit_transform([[3.0, 4.0], [0.0, 0.0]])
 ```
 
+```python
+from rsklearn.preprocessing import RobustScaler
+
+X_robust = RobustScaler(quantile_range=(25.0, 75.0)).fit_transform(X)
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
-array-like numeric input. Inputs are converted to contiguous float64 arrays for
-the Rust core. Transforming float32 input returns float32 output; other numeric
-input returns float64 output. NaNs are ignored while fitting and preserved
-while transforming. Infinity is rejected. Inputs are not mutated.
+array-like numeric input. Scalers compute fitted statistics as float64;
+`Normalizer` and `RobustScaler` use native float32 transform kernels when
+possible. Transforming float32 input returns float32 output; other numeric input
+returns float64 output. Supported estimators ignore NaNs while fitting and
+preserve them while transforming. Infinity is rejected.
 
 `StandardScaler` and `MinMaxScaler` support incremental updates through
 `partial_fit`. `Normalizer` supports L1, L2, and max row normalization with
 native float32 and float64 Rust kernels. Its `copy=False` behavior is
 best-effort, matching scikit-learn's documented contract.
+
+`RobustScaler` supports optional centering and scaling, custom quantile ranges,
+unit-variance scaling, inverse transforms, NaN-aware fitting, native float32
+and float64 transforms, and best-effort `copy=False`.
 
 `LabelEncoder` accepts one-dimensional signed integer, unsigned integer,
 floating-point, boolean, or UTF-8 string labels. Empty labels, NaN, infinity,
@@ -164,7 +176,7 @@ The release workflow uses PyPI Trusted Publishing and contains no API token.
 ## Roadmap
 
 - Close the remaining production gaps listed above.
-- Add robust scaling, encoding, and discretization estimators.
+- Add categorical encoding and discretization estimators.
 - Publish reproducible benchmark reports from release wheels.
 
 ## License
