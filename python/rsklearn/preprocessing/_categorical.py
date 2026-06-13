@@ -208,14 +208,20 @@ def _encode_column(
 
 def validate_categorical_input(X: Any, *, estimator: Any, reset: bool) -> NDArray[Any]:
     """Validate dense two-dimensional categorical input and feature metadata."""
+    values = np.asarray(X, dtype=object) if isinstance(X, (list, tuple)) else X
     array = validate_data(
         estimator,
-        X,
+        values,
         reset=reset,
         dtype=None,
         ensure_all_finite="allow-nan",
     )
-    if np.iscomplexobj(array):
+    if np.iscomplexobj(array) or (
+        array.dtype == object
+        and any(
+            isinstance(value, (complex, np.complexfloating)) for value in array.flat
+        )
+    ):
         raise ValueError("Complex data not supported")
     return np.asarray(array)
 
@@ -262,9 +268,70 @@ def encode_categories(
     return encoded, encoded >= 0
 
 
+def state_from_categories(
+    X: Any, categories: Any, *, estimator: Any
+) -> tuple[CategoricalState, NDArray[np.int64]]:
+    """Validate explicit per-feature categories and encode fitting input."""
+    array = validate_categorical_input(X, estimator=estimator, reset=True)
+    if not isinstance(categories, (list, tuple)):
+        raise TypeError("categories must be 'auto' or a list of array-like values")
+    if len(categories) != array.shape[1]:
+        raise ValueError(
+            "categories must provide exactly one category array per input feature"
+        )
+    learned: list[NDArray[Any]] = []
+    kinds: list[str] = []
+    for index, supplied in enumerate(categories):
+        feature_categories = np.asarray(supplied)
+        if feature_categories.ndim != 1 or feature_categories.size == 0:
+            raise ValueError(f"categories[{index}] must be a non-empty 1D array")
+        kind = _column_kind(array[:, index])
+        supplied_kind = _column_kind(feature_categories)
+        numeric_kinds = {"bool", "signed", "unsigned", "float"}
+        compatible = (
+            kind == supplied_kind
+            or {kind, supplied_kind} <= {"string", "object_string"}
+            or {kind, supplied_kind} <= numeric_kinds
+        )
+        if not compatible:
+            raise TypeError(
+                f"categories[{index}] has {supplied_kind} values, but feature "
+                f"{index} contains {kind} values"
+            )
+        values = _coerce_column(feature_categories, kind)
+        if kind == "float" and np.isinf(values).any():
+            raise ValueError(f"categories[{index}] contains infinity")
+        if kind in {"bool", "signed", "unsigned", "float"}:
+            discovered, _ = _discover_column(values, kind)
+            if discovered.size != values.size or not np.array_equal(
+                discovered, values, equal_nan=True
+            ):
+                raise ValueError(
+                    f"categories[{index}] must contain unique values sorted in "
+                    "ascending order, with NaN last"
+                )
+        else:
+            _, codes = _discover_column(values, kind)
+            if np.unique(codes).size != values.size:
+                raise ValueError(f"categories[{index}] contains duplicate values")
+        learned.append(values)
+        kinds.append(kind)
+    state = CategoricalState(tuple(learned), tuple(kinds))
+    encoded, known = encode_categories(array, state, estimator=estimator)
+    if not np.all(known):
+        index = int(np.flatnonzero(~known)[0])
+        row, column = np.unravel_index(index, known.shape)
+        raise ValueError(
+            f"Found unknown category {array[row, column]!r} in column "
+            f"{column} during fit"
+        )
+    return state, encoded
+
+
 __all__ = [
     "CategoricalState",
     "discover_categories",
     "encode_categories",
+    "state_from_categories",
     "validate_categorical_input",
 ]

@@ -17,7 +17,109 @@ def _estimator_name(estimator: Any) -> str:
 
 
 def _is_sparse(value: Any) -> bool:
-    return type(value).__module__.startswith("scipy.sparse")
+    try:
+        from scipy import sparse
+    except ImportError:
+        return False
+    return bool(sparse.issparse(value))
+
+
+def _accepted_sparse_formats(
+    accept_sparse: bool | str | list[str] | tuple[str, ...],
+) -> tuple[str, ...] | None:
+    if accept_sparse is True:
+        return None
+    if accept_sparse is False:
+        return ()
+    formats = (
+        (accept_sparse,) if isinstance(accept_sparse, str) else tuple(accept_sparse)
+    )
+    valid = {"bsr", "coo", "csc", "csr", "dia", "dok", "lil"}
+    if not formats or any(item not in valid for item in formats):
+        raise ValueError(f"accept_sparse contains unsupported formats: {formats}")
+    return formats
+
+
+def _check_sparse_finite(array: Any, policy: bool | str, *, name: str) -> None:
+    _check_finite(_sparse_stored_data(array), policy, name=name)
+
+
+def _sparse_stored_data(array: Any) -> NDArray[Any]:
+    data = getattr(array, "data", None)
+    if isinstance(data, np.ndarray):
+        return data
+    return np.asarray(array.tocoo(copy=False).data)
+
+
+def _check_sparse_array(
+    array: Any,
+    *,
+    accept_sparse: bool | str | list[str] | tuple[str, ...],
+    accept_large_sparse: bool,
+    dtype: Any,
+    copy: bool,
+    force_writeable: bool,
+    ensure_all_finite: bool | str,
+    ensure_non_negative: bool,
+    ensure_min_samples: int,
+    ensure_min_features: int,
+    prefix: str,
+    name: str,
+) -> Any:
+    formats = _accepted_sparse_formats(accept_sparse)
+    if formats == ():
+        raise TypeError(
+            f"{prefix}does not support sparse input; dense data is required"
+        )
+    result = array
+    if np.iscomplexobj(result) and dtype == "numeric":
+        raise ValueError("Complex data not supported")
+    if formats is not None and result.format not in formats:
+        result = result.asformat(formats[0])
+    target_dtype = None if dtype in (None, "numeric") else dtype
+    if dtype == "numeric" and result.dtype.kind in "OUSV":
+        target_dtype = np.float64
+    if target_dtype is not None and result.dtype != np.dtype(target_dtype):
+        result = result.astype(target_dtype)
+    elif copy:
+        result = result.copy()
+    if result.ndim != 2:
+        raise ValueError(f"{prefix}expected a 2-dimensional sparse array")
+    if result.shape[0] < ensure_min_samples:
+        raise ValueError(
+            f"Found array with {result.shape[0]} sample(s) (shape={result.shape}) "
+            f"while a minimum of {ensure_min_samples} is required."
+        )
+    if result.shape[1] < ensure_min_features:
+        raise ValueError(
+            f"{result.shape[1]} feature(s) (shape={result.shape}) while a minimum "
+            f"of {ensure_min_features} is required."
+        )
+    if not accept_large_sparse:
+        for attribute in ("indices", "indptr"):
+            values = getattr(result, attribute, None)
+            if values is not None and values.dtype != np.dtype(np.int32):
+                raise ValueError(
+                    "Only sparse matrices with 32-bit integer indices are accepted"
+                )
+    _check_sparse_finite(result, ensure_all_finite, name=f"{prefix}{name}".strip())
+    stored_data = _sparse_stored_data(result)
+    if ensure_non_negative and stored_data.size and np.any(stored_data < 0):
+        raise ValueError(f"{prefix}{name} contains negative values")
+    writable_arrays = [
+        values
+        for values in (
+            getattr(result, "data", None),
+            getattr(result, "indices", None),
+            getattr(result, "indptr", None),
+        )
+        if isinstance(values, np.ndarray)
+    ]
+    if force_writeable and any(
+        not values.flags.writeable for values in writable_arrays
+    ):
+        result = result.copy()
+    return result
 
 
 def _check_finite(array: NDArray[Any], policy: bool | str, *, name: str) -> None:
@@ -56,19 +158,30 @@ def check_array(
     ensure_min_features: int = 1,
     estimator: Any = None,
     input_name: str = "",
-) -> NDArray[Any]:
+) -> Any:
     """Validate array-like input and return a NumPy array.
 
-    Sparse inputs are rejected because rsklearn does not yet ship sparse
-    kernels. ``accept_sparse`` is accepted for API compatibility.
+    SciPy sparse inputs are preserved or converted to an explicitly accepted
+    sparse format. Sparse inputs are rejected unless ``accept_sparse`` is set.
     """
-    del accept_large_sparse
     name = input_name or "input"
     estimator_name = _estimator_name(estimator)
     prefix = f"{estimator_name} " if estimator_name else ""
     if _is_sparse(array):
-        support = "even when accept_sparse is set" if accept_sparse else ""
-        raise TypeError(f"{prefix}does not support sparse input {support}".rstrip())
+        return _check_sparse_array(
+            array,
+            accept_sparse=accept_sparse,
+            accept_large_sparse=accept_large_sparse,
+            dtype=dtype,
+            copy=copy,
+            force_writeable=force_writeable,
+            ensure_all_finite=ensure_all_finite,
+            ensure_non_negative=ensure_non_negative,
+            ensure_min_samples=ensure_min_samples,
+            ensure_min_features=ensure_min_features,
+            prefix=prefix,
+            name=name,
+        )
     original = np.asarray(array)
     allow_complex = dtype is None
     if dtype not in (None, "numeric"):

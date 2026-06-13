@@ -4,6 +4,7 @@ import pytest
 from rsklearn.preprocessing import (
     MinMaxScaler,
     Normalizer,
+    OrdinalEncoder,
     RobustScaler,
     StandardScaler,
 )
@@ -12,7 +13,14 @@ sklearn_checks = pytest.importorskip("sklearn.utils.estimator_checks")
 
 
 @pytest.mark.parametrize(
-    "estimator", [StandardScaler(), MinMaxScaler(), Normalizer(), RobustScaler()]
+    "estimator",
+    [
+        StandardScaler(),
+        MinMaxScaler(),
+        Normalizer(),
+        RobustScaler(),
+        OrdinalEncoder(),
+    ],
 )
 def test_scaler_passes_scikit_learn_estimator_checks(estimator):
     with warnings.catch_warnings():

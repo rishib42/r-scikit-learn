@@ -11,6 +11,7 @@ from .preprocessing import (
     LabelEncoder,
     MinMaxScaler,
     Normalizer,
+    OrdinalEncoder,
     RobustScaler,
     StandardScaler,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "LabelEncoder",
     "MinMaxScaler",
     "Normalizer",
+    "OrdinalEncoder",
     "RegressorMixin",
     "RobustScaler",
     "StandardScaler",

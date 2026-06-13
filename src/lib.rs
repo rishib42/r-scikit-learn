@@ -6,12 +6,13 @@ mod label_encoder;
 mod minmax_scaler;
 mod normalizer;
 mod robust_scaler;
+mod sparse;
 mod standard_scaler;
 
 use numpy::ndarray::Array2;
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3,
-    PyUntypedArrayMethods,
+    PyReadwriteArray1, PyUntypedArrayMethods,
 };
 use pyo3::prelude::*;
 
@@ -61,6 +62,104 @@ fn array2_output_i64<'py>(
     let array = Array2::from_shape_vec((rows, cols), values)
         .map_err(|_| error::CoreError::ShapeMismatch)?;
     Ok(array.into_pyarray(py))
+}
+
+#[pyfunction]
+fn sparse_validate_i32(
+    py: Python<'_>,
+    indices: PyReadonlyArray1<'_, i32>,
+    indptr: PyReadonlyArray1<'_, i32>,
+    major_dimension: usize,
+    minor_dimension: usize,
+    nnz: usize,
+) -> PyResult<()> {
+    let indices = indices.as_slice()?;
+    let indptr = indptr.as_slice()?;
+    py.detach(|| {
+        sparse::validate_compressed(indices, indptr, major_dimension, minor_dimension, nnz)
+    })?;
+    Ok(())
+}
+
+#[pyfunction]
+fn sparse_validate_i64(
+    py: Python<'_>,
+    indices: PyReadonlyArray1<'_, i64>,
+    indptr: PyReadonlyArray1<'_, i64>,
+    major_dimension: usize,
+    minor_dimension: usize,
+    nnz: usize,
+) -> PyResult<()> {
+    let indices = indices.as_slice()?;
+    let indptr = indptr.as_slice()?;
+    py.detach(|| {
+        sparse::validate_compressed(indices, indptr, major_dimension, minor_dimension, nnz)
+    })?;
+    Ok(())
+}
+
+#[pyfunction]
+#[pyo3(signature = (values, indices, scale, inverse=false))]
+fn sparse_scale_csr_i32_f64(
+    py: Python<'_>,
+    mut values: PyReadwriteArray1<'_, f64>,
+    indices: PyReadonlyArray1<'_, i32>,
+    scale: PyReadonlyArray1<'_, f64>,
+    inverse: bool,
+) -> PyResult<()> {
+    let values = values.as_slice_mut()?;
+    let indices = indices.as_slice()?;
+    let scale = scale.as_slice()?;
+    py.detach(|| sparse::scale_csr_columns_in_place(values, indices, scale, inverse))?;
+    Ok(())
+}
+
+#[pyfunction]
+#[pyo3(signature = (values, indices, scale, inverse=false))]
+fn sparse_scale_csr_i64_f64(
+    py: Python<'_>,
+    mut values: PyReadwriteArray1<'_, f64>,
+    indices: PyReadonlyArray1<'_, i64>,
+    scale: PyReadonlyArray1<'_, f64>,
+    inverse: bool,
+) -> PyResult<()> {
+    let values = values.as_slice_mut()?;
+    let indices = indices.as_slice()?;
+    let scale = scale.as_slice()?;
+    py.detach(|| sparse::scale_csr_columns_in_place(values, indices, scale, inverse))?;
+    Ok(())
+}
+
+#[pyfunction]
+#[pyo3(signature = (values, indices, scale, inverse=false))]
+fn sparse_scale_csr_i32_f32(
+    py: Python<'_>,
+    mut values: PyReadwriteArray1<'_, f32>,
+    indices: PyReadonlyArray1<'_, i32>,
+    scale: PyReadonlyArray1<'_, f32>,
+    inverse: bool,
+) -> PyResult<()> {
+    let values = values.as_slice_mut()?;
+    let indices = indices.as_slice()?;
+    let scale = scale.as_slice()?;
+    py.detach(|| sparse::scale_csr_columns_in_place(values, indices, scale, inverse))?;
+    Ok(())
+}
+
+#[pyfunction]
+#[pyo3(signature = (values, indices, scale, inverse=false))]
+fn sparse_scale_csr_i64_f32(
+    py: Python<'_>,
+    mut values: PyReadwriteArray1<'_, f32>,
+    indices: PyReadonlyArray1<'_, i64>,
+    scale: PyReadonlyArray1<'_, f32>,
+    inverse: bool,
+) -> PyResult<()> {
+    let values = values.as_slice_mut()?;
+    let indices = indices.as_slice()?;
+    let scale = scale.as_slice()?;
+    py.detach(|| sparse::scale_csr_columns_in_place(values, indices, scale, inverse))?;
+    Ok(())
 }
 
 #[pyfunction]
@@ -669,6 +768,12 @@ fn label_inverse_strings(
 
 #[pymodule]
 fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(sparse_validate_i32, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_validate_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_scale_csr_i32_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_scale_csr_i64_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_scale_csr_i32_f32, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_scale_csr_i64_f32, module)?)?;
     module.add_function(wrap_pyfunction!(standard_fit, module)?)?;
     module.add_function(wrap_pyfunction!(standard_merge, module)?)?;
     module.add_function(wrap_pyfunction!(standard_transform, module)?)?;

@@ -3,12 +3,12 @@
 `r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
 computational core and lightweight Python estimator classes. Version 0.1.0
 provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
-`LabelEncoder`.
+`LabelEncoder`, and `OrdinalEncoder`.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
 The installable distribution is named `r-scikit-learn`. Its Python import
-package remains `rsklearn` because Python module names cannot contain hyphens.
+package is `rsklearn`.
 
 ## Installation
 
@@ -73,6 +73,16 @@ from rsklearn.preprocessing import RobustScaler
 X_robust = RobustScaler(quantile_range=(25.0, 75.0)).fit_transform(X)
 ```
 
+```python
+from rsklearn.preprocessing import OrdinalEncoder
+
+encoder = OrdinalEncoder(
+    handle_unknown="use_encoded_value",
+    unknown_value=-1,
+)
+X_encoded = encoder.fit_transform([["small"], ["large"], ["small"]])
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -103,12 +113,20 @@ Public estimator-author APIs are available from `rsklearn.base` and
 feature-count, and string feature-name validation. The numeric preprocessors
 pass scikit-learn's official estimator checks.
 
+Shared sparse infrastructure is available from `rsklearn.utils`. It validates
+and converts SciPy sparse formats, exposes canonical CSR/CSC components to safe
+Rust kernels, reconstructs validated sparse output, and provides native
+float32/float64 sparse column scaling. Existing estimators remain dense-only
+until their sparse-specific behavior is implemented.
+
 Contiguous NumPy Unicode arrays are exposed to safe Rust as fixed-width
 codepoint rows, avoiding per-label Python string conversion in the hot path.
 The internal categorical layer also provides per-feature numeric, boolean, and
 Unicode discovery and lookup kernels, exact large-integer handling, missing
 categories, unknown masks, mixed-type validation, and feature-name checks for
-future categorical encoders.
+categorical encoders. `OrdinalEncoder` uses this layer and supports explicit or
+automatically discovered categories, unknown and missing-value encoding,
+infrequent-category grouping, inverse transforms, and output feature names.
 
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is
@@ -128,9 +146,11 @@ The core implemented behavior is tested and packaged across Linux, macOS, and
 Windows, but the project remains alpha software. Before a stable 1.0 release,
 the following compatibility and operational work remains:
 
-- Sparse matrix support, including non-centering `StandardScaler` operation.
+- Sparse-aware estimator behavior, including non-centering `StandardScaler`
+  operation. Shared CSR/CSC validation and Rust kernels are implemented.
 - `sample_weight` support for `StandardScaler.partial_fit`.
-- `get_feature_names_out` and configurable output containers.
+- Comprehensive `get_feature_names_out` support and configurable output
+  containers across estimators.
 - Estimator-check compliance for future classifier and regressor types.
 - Broader `copy=False` support and native float32 Rust kernels for scalers.
 - Broader fuzz, property, memory-pressure, and long-running benchmark coverage.
@@ -180,7 +200,8 @@ The release workflow uses PyPI Trusted Publishing and contains no API token.
 ## Roadmap
 
 - Close the remaining production gaps listed above.
-- Add categorical encoding and discretization estimators.
+- Add sparse infrastructure and `OneHotEncoder`.
+- Add further categorical encoding and discretization estimators.
 - Publish reproducible benchmark reports from release wheels.
 
 ## License

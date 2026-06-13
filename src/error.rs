@@ -18,6 +18,10 @@ pub enum CoreError {
     InvalidNorm(String),
     #[error("invalid quantile range: ({0}, {1})")]
     InvalidQuantileRange(f64, f64),
+    #[error("invalid compressed sparse matrix structure")]
+    InvalidSparseStructure,
+    #[error("sparse index {0} is outside dimension {1}")]
+    SparseIndexOutOfBounds(usize, usize),
 }
 
 impl From<CoreError> for PyErr {

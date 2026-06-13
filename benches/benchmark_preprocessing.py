@@ -14,10 +14,13 @@ from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
     Normalizer,
+    OrdinalEncoder,
     RobustScaler,
     StandardScaler,
 )
 from rsklearn.preprocessing._categorical import discover_categories, encode_categories
+from rsklearn.utils import check_array, scale_sparse_columns, sparse_components
+from scipy import sparse
 
 # The scikit-learn distribution intentionally exposes the `sklearn` import package.
 from sklearn.preprocessing import LabelEncoder as ScikitLabelEncoder
@@ -26,6 +29,8 @@ from sklearn.preprocessing import Normalizer as ScikitNormalizer
 from sklearn.preprocessing import OrdinalEncoder as ScikitOrdinalEncoder
 from sklearn.preprocessing import RobustScaler as ScikitRobustScaler
 from sklearn.preprocessing import StandardScaler as ScikitStandardScaler
+from sklearn.utils.sparsefuncs import inplace_column_scale
+from sklearn.utils.validation import check_array as ScikitCheckArray
 
 
 def measure(function: Callable[[], object], repetitions: int) -> tuple[float, float]:
@@ -160,6 +165,7 @@ def benchmark_categories(repetitions: int) -> None:
         ours_estimator = _CategoricalBenchmarkEstimator()
         state, _ = discover_categories(X, estimator=ours_estimator)
         theirs = ScikitOrdinalEncoder().fit(X)
+        ours_public = OrdinalEncoder().fit(X)
         report_comparison(
             f"Category discovery + encoding {category_type}",
             lambda values=X: discover_categories(
@@ -176,6 +182,58 @@ def benchmark_categories(repetitions: int) -> None:
             lambda values=X, encoder=theirs: encoder.transform(values),
             repetitions,
         )
+        report_comparison(
+            f"OrdinalEncoder fit_transform {category_type}",
+            lambda values=X: OrdinalEncoder().fit_transform(values),
+            lambda values=X: ScikitOrdinalEncoder().fit_transform(values),
+            repetitions,
+        )
+        report_comparison(
+            f"OrdinalEncoder transform {category_type}",
+            lambda values=X, encoder=ours_public: encoder.transform(values),
+            lambda values=X, encoder=theirs: encoder.transform(values),
+            repetitions,
+        )
+
+
+def benchmark_sparse(repetitions: int) -> None:
+    rng = np.random.default_rng(42)
+    matrix = sparse.random(
+        1_000_000,
+        100,
+        density=0.001,
+        format="csr",
+        random_state=rng,
+        dtype=np.float64,
+    )
+    scale = rng.uniform(0.5, 2.0, size=matrix.shape[1])
+
+    def scikit_scale() -> object:
+        output = matrix.copy()
+        inplace_column_scale(output, 1.0 / scale)
+        return output
+
+    print(
+        f"\nSparse CSR matrix: {matrix.shape[0]:,} x {matrix.shape[1]} "
+        f"({matrix.nnz:,} nnz)"
+    )
+    report_comparison(
+        "Sparse check_array validation",
+        lambda: check_array(matrix, accept_sparse="csr"),
+        lambda: ScikitCheckArray(matrix, accept_sparse="csr"),
+        repetitions,
+    )
+    report_single(
+        "Rust-validated sparse components",
+        lambda: sparse_components(matrix),
+        repetitions,
+    )
+    report_comparison(
+        "Sparse column scaling",
+        lambda: scale_sparse_columns(matrix, scale),
+        scikit_scale,
+        repetitions,
+    )
 
 
 def main() -> None:
@@ -189,6 +247,7 @@ def main() -> None:
         benchmark_matrix(1_000_000, 10, args.repetitions)
     benchmark_labels(args.repetitions)
     benchmark_categories(args.repetitions)
+    benchmark_sparse(args.repetitions)
     print(
         "\nTimes include Python-to-Rust validation/conversion for "
         "r-scikit-learn public API calls. Positive improvement means "

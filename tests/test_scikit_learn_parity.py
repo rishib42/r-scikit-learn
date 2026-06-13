@@ -4,6 +4,7 @@ from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
     Normalizer,
+    OrdinalEncoder,
     RobustScaler,
     StandardScaler,
 )
@@ -13,6 +14,7 @@ scikit_learn_preprocessing = pytest.importorskip("sklearn.preprocessing")
 ScikitLabelEncoder = scikit_learn_preprocessing.LabelEncoder
 ScikitMinMaxScaler = scikit_learn_preprocessing.MinMaxScaler
 ScikitNormalizer = scikit_learn_preprocessing.Normalizer
+ScikitOrdinalEncoder = scikit_learn_preprocessing.OrdinalEncoder
 ScikitRobustScaler = scikit_learn_preprocessing.RobustScaler
 ScikitStandardScaler = scikit_learn_preprocessing.StandardScaler
 
@@ -74,6 +76,30 @@ def test_label_encoder_parity(labels):
         ours.fit_transform(labels), theirs.fit_transform(labels)
     )
     np.testing.assert_array_equal(ours.classes_, theirs.classes_)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"dtype": np.float32},
+        {"handle_unknown": "use_encoded_value", "unknown_value": -1},
+        {"encoded_missing_value": -2},
+        {"min_frequency": 2},
+        {"max_categories": 3},
+        {"categories": [["z", "a", "b"], [1, 2, 3, np.nan]]},
+    ],
+)
+def test_ordinal_encoder_parity(options):
+    X = np.asarray(
+        [["a", 1], ["b", 3], ["a", 2], ["z", 1], ["b", np.nan]],
+        dtype=object,
+    )
+    ours = OrdinalEncoder(**options)
+    theirs = ScikitOrdinalEncoder(**options)
+    np.testing.assert_allclose(
+        ours.fit_transform(X), theirs.fit_transform(X), equal_nan=True
+    )
 
 
 def test_randomized_scaler_parity():
