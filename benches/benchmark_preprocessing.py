@@ -9,11 +9,17 @@ from collections.abc import Callable
 
 import numpy as np
 from rsklearn._validation import validate_numeric_2d
-from rsklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
+from rsklearn.preprocessing import (
+    LabelEncoder,
+    MinMaxScaler,
+    Normalizer,
+    StandardScaler,
+)
 
 # The scikit-learn distribution intentionally exposes the `sklearn` import package.
 from sklearn.preprocessing import LabelEncoder as ScikitLabelEncoder
 from sklearn.preprocessing import MinMaxScaler as ScikitMinMaxScaler
+from sklearn.preprocessing import Normalizer as ScikitNormalizer
 from sklearn.preprocessing import StandardScaler as ScikitStandardScaler
 
 
@@ -69,6 +75,7 @@ def benchmark_matrix(rows: int, columns: int, repetitions: int) -> None:
     for name, ours, theirs in [
         ("StandardScaler", StandardScaler, ScikitStandardScaler),
         ("MinMaxScaler", MinMaxScaler, ScikitMinMaxScaler),
+        ("Normalizer", Normalizer, ScikitNormalizer),
     ]:
         ours_fitted = ours().fit(X)
         theirs_fitted = theirs().fit(X)
@@ -90,6 +97,15 @@ def benchmark_matrix(rows: int, columns: int, repetitions: int) -> None:
             lambda c=theirs: c().fit(X),
             repetitions,
         )
+    X_float32 = X.astype(np.float32)
+    ours_float32 = Normalizer().fit(X_float32)
+    theirs_float32 = ScikitNormalizer().fit(X_float32)
+    report_comparison(
+        "Normalizer float32 transform",
+        lambda: ours_float32.transform(X_float32),
+        lambda: theirs_float32.transform(X_float32),
+        repetitions,
+    )
 
 
 def benchmark_labels(repetitions: int) -> None:

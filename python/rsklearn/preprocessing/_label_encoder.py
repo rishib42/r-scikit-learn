@@ -9,8 +9,8 @@ from numpy.typing import NDArray
 
 from rsklearn import _core
 from rsklearn._validation import validate_codes, validate_labels
-
-from ._base import EstimatorMixin
+from rsklearn.base import BaseEstimator, TransformerMixin
+from rsklearn.utils.validation import check_is_fitted
 
 
 def _unicode_codepoints(values: NDArray[Any]) -> NDArray[np.uint32]:
@@ -19,10 +19,12 @@ def _unicode_codepoints(values: NDArray[Any]) -> NDArray[np.uint32]:
     return values.view(np.uint32).reshape(values.size, width)
 
 
-class LabelEncoder(EstimatorMixin):
+class LabelEncoder(TransformerMixin, BaseEstimator):
     """Encode numeric, boolean, or Unicode labels as consecutive integers."""
 
     _parameter_names: tuple[str, ...] = ()
+    _rsklearn_input_tags = {"one_d_array": True, "two_d_array": False}
+    _rsklearn_target_tags = {"required": False, "one_d_labels": True}
 
     def fit(self, y: Any) -> LabelEncoder:
         """Learn sorted unique classes and return self."""
@@ -46,7 +48,7 @@ class LabelEncoder(EstimatorMixin):
 
     def transform(self, y: Any) -> NDArray[np.int64]:
         """Encode labels using fitted classes."""
-        self._check_fitted("classes_", "_label_kind")
+        check_is_fitted(self, ("classes_", "_label_kind"))
         values, kind, _ = validate_labels(y)
         if kind != self._label_kind:
             raise TypeError(f"LabelEncoder was fitted on {self._label_kind} labels")
@@ -99,7 +101,7 @@ class LabelEncoder(EstimatorMixin):
 
     def inverse_transform(self, y: Any) -> NDArray[Any]:
         """Decode integer labels using fitted classes."""
-        self._check_fitted("classes_", "_label_kind")
+        check_is_fitted(self, ("classes_", "_label_kind"))
         codes = validate_codes(y)
         if self._label_kind == "signed":
             return _core.label_inverse_i64(

@@ -2,7 +2,7 @@
 
 `r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
 computational core and lightweight Python estimator classes. Version 0.1.0
-provides `StandardScaler`, `MinMaxScaler`, and `LabelEncoder`.
+provides `StandardScaler`, `MinMaxScaler`, `Normalizer`, and `LabelEncoder`.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -60,6 +60,12 @@ encoded = encoder.fit_transform(["café", "東京", "café"])
 labels = encoder.inverse_transform(encoded)
 ```
 
+```python
+from rsklearn.preprocessing import Normalizer
+
+X_normalized = Normalizer(norm="l2").fit_transform([[3.0, 4.0], [0.0, 0.0]])
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -69,12 +75,21 @@ input returns float64 output. NaNs are ignored while fitting and preserved
 while transforming. Infinity is rejected. Inputs are not mutated.
 
 `StandardScaler` and `MinMaxScaler` support incremental updates through
-`partial_fit`.
+`partial_fit`. `Normalizer` supports L1, L2, and max row normalization with
+native float32 and float64 Rust kernels. Its `copy=False` behavior is
+best-effort, matching scikit-learn's documented contract.
 
 `LabelEncoder` accepts one-dimensional signed integer, unsigned integer,
 floating-point, boolean, or UTF-8 string labels. Empty labels, NaN, infinity,
 and values across the full int64/uint64 ranges are supported. Integer class
 values preserve their input dtype.
+
+Public estimator-author APIs are available from `rsklearn.base` and
+`rsklearn.utils.validation`. They include `BaseEstimator`, `TransformerMixin`,
+`ClassifierMixin`, `RegressorMixin`, `clone`, `check_array`, `check_X_y`,
+`check_is_fitted`, and `validate_data`. Scalers use these APIs for fitted-state,
+feature-count, and string feature-name validation. The numeric preprocessors
+pass scikit-learn's official estimator checks.
 
 Contiguous NumPy Unicode arrays are exposed to safe Rust as fixed-width
 codepoint rows, avoiding per-label Python string conversion in the hot path.
@@ -99,9 +114,9 @@ the following compatibility and operational work remains:
 
 - Sparse matrix support, including non-centering `StandardScaler` operation.
 - `sample_weight` support for `StandardScaler.partial_fit`.
-- DataFrame feature-name tracking and `get_feature_names_out`.
-- Configurable output containers and scikit-learn estimator-check compliance.
-- A best-effort `copy=False` API and native float32 Rust kernels.
+- `get_feature_names_out` and configurable output containers.
+- Estimator-check compliance for future classifier and regressor types.
+- Broader `copy=False` support and native float32 Rust kernels for scalers.
 - Broader fuzz, property, memory-pressure, and long-running benchmark coverage.
 
 No performance claim is made. Run:

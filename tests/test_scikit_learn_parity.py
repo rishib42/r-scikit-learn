@@ -1,11 +1,17 @@
 import numpy as np
 import pytest
-from rsklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
+from rsklearn.preprocessing import (
+    LabelEncoder,
+    MinMaxScaler,
+    Normalizer,
+    StandardScaler,
+)
 
 # The scikit-learn distribution intentionally exposes the `sklearn` import package.
 scikit_learn_preprocessing = pytest.importorskip("sklearn.preprocessing")
 ScikitLabelEncoder = scikit_learn_preprocessing.LabelEncoder
 ScikitMinMaxScaler = scikit_learn_preprocessing.MinMaxScaler
+ScikitNormalizer = scikit_learn_preprocessing.Normalizer
 ScikitStandardScaler = scikit_learn_preprocessing.StandardScaler
 
 
@@ -84,6 +90,28 @@ def test_randomized_scaler_parity():
             rtol=1e-11,
             atol=1e-11,
         )
+
+
+@pytest.mark.parametrize("norm", ["l1", "l2", "max"])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_normalizer_parity(norm, dtype):
+    rng = np.random.default_rng(20260613)
+    X = rng.normal(size=(250, 12)).astype(dtype)
+    X[0] = 0
+    ours = Normalizer(norm=norm).fit_transform(X)
+    theirs = ScikitNormalizer(norm=norm).fit_transform(X)
+    assert ours.dtype == theirs.dtype == dtype
+    np.testing.assert_allclose(ours, theirs, rtol=1e-6, atol=1e-7)
+
+
+@pytest.mark.parametrize("norm", ["l1", "l2", "max"])
+def test_normalizer_extreme_value_parity(norm):
+    X = np.asarray([[0.0, 0.0], [1e-308, 1e-308], [1e308, 1e308], [-3.0, 4.0]])
+    np.testing.assert_allclose(
+        Normalizer(norm=norm).fit_transform(X),
+        ScikitNormalizer(norm=norm).fit_transform(X),
+        equal_nan=True,
+    )
 
 
 @pytest.mark.parametrize(

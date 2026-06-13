@@ -49,7 +49,7 @@ def test_minmax_partial_fit_matches_complete_fit():
 )
 def test_minmax_constructor_validation(kwargs, exception):
     with pytest.raises(exception):
-        MinMaxScaler(**kwargs)
+        MinMaxScaler(**kwargs).fit([[1.0]])
 
 
 def test_minmax_params_repr_and_state_checks():
@@ -59,7 +59,7 @@ def test_minmax_params_repr_and_state_checks():
     with pytest.raises(ValueError, match="not fitted"):
         MinMaxScaler().inverse_transform([[0.0]])
     scaler.fit([[1.0, 2.0]])
-    with pytest.raises(ValueError, match="expected 2 features"):
+    with pytest.raises(ValueError, match="expecting 2 features"):
         scaler.transform([[1.0]])
-    with pytest.raises(ValueError, match="expected 2 features"):
+    with pytest.raises(ValueError, match="expecting 2 features"):
         scaler.partial_fit([[1.0]])

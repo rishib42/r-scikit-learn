@@ -7,24 +7,19 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from rsklearn.utils.validation import check_array, validate_data
+
 
 def validate_numeric_2d_with_dtype(
-    X: Any, *, estimator: str
+    X: Any, *, estimator: Any, reset: bool | None = None
 ) -> tuple[NDArray[np.float64], np.dtype[Any]]:
     """Return a non-empty contiguous float64 matrix and its output dtype."""
-    try:
-        original = np.asarray(X)
-        array = np.asarray(original, dtype=np.float64)
-    except (TypeError, ValueError) as error:
-        raise TypeError(f"{estimator} requires numeric input") from error
-    if array.ndim != 2:
-        raise ValueError(
-            f"{estimator} expected a 2-dimensional array, got {array.ndim}D"
-        )
-    if array.shape[0] == 0 or array.shape[1] == 0:
-        raise ValueError(f"{estimator} requires at least one sample and one feature")
-    if np.isinf(array).any():
-        raise ValueError(f"{estimator} does not support infinity")
+    original = np.asarray(X)
+    parameters = {"dtype": np.float64, "order": "C", "ensure_all_finite": "allow-nan"}
+    if reset is None or isinstance(estimator, str):
+        array = check_array(X, estimator=estimator, **parameters)
+    else:
+        array = validate_data(estimator, X, reset=reset, **parameters)
     output_dtype = (
         np.dtype(np.float32)
         if original.dtype == np.dtype(np.float32)
@@ -33,15 +28,40 @@ def validate_numeric_2d_with_dtype(
     return np.ascontiguousarray(array, dtype=np.float64), output_dtype
 
 
-def validate_numeric_2d(X: Any, *, estimator: str) -> NDArray[np.float64]:
+def validate_numeric_2d(
+    X: Any, *, estimator: Any, reset: bool | None = None
+) -> NDArray[np.float64]:
     """Return a non-empty, C-contiguous float64 matrix."""
-    return validate_numeric_2d_with_dtype(X, estimator=estimator)[0]
+    return validate_numeric_2d_with_dtype(X, estimator=estimator, reset=reset)[0]
+
+
+def validate_normalizer_2d(
+    X: Any, *, estimator: Any, reset: bool, copy: bool
+) -> NDArray[np.float32] | NDArray[np.float64]:
+    """Return finite contiguous float32 or float64 input for Normalizer."""
+    array = validate_data(
+        estimator,
+        X,
+        reset=reset,
+        dtype="numeric",
+        order="C",
+        copy=copy,
+        ensure_all_finite=True,
+    )
+    dtype = np.float32 if array.dtype == np.dtype(np.float32) else np.float64
+    try:
+        return np.ascontiguousarray(array, dtype=dtype)
+    except (TypeError, ValueError) as error:
+        raise TypeError(f"{type(estimator).__name__} requires numeric input") from error
 
 
 def check_feature_count(
     X: NDArray[np.float64], n_features_in: int, *, estimator: str
 ) -> None:
-    """Reject matrices with a different feature count than fitted data."""
+    """Reject matrices with a different feature count than fitted data.
+
+    Kept for backward compatibility. New estimators should use ``validate_data``.
+    """
     if X.shape[1] != n_features_in:
         raise ValueError(
             f"{estimator} expected {n_features_in} features, got {X.shape[1]}"

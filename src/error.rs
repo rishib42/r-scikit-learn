@@ -14,6 +14,8 @@ pub enum CoreError {
     InvalidCode(i64),
     #[error("string labels contain an invalid Unicode code point: {0}")]
     InvalidUnicode(u32),
+    #[error("unsupported normalization norm: {0}")]
+    InvalidNorm(String),
 }
 
 impl From<CoreError> for PyErr {

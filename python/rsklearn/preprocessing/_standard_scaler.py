@@ -8,16 +8,12 @@ import numpy as np
 from numpy.typing import NDArray
 
 from rsklearn import _core
-from rsklearn._validation import (
-    check_feature_count,
-    validate_numeric_2d,
-    validate_numeric_2d_with_dtype,
-)
-
-from ._base import EstimatorMixin
+from rsklearn._validation import validate_numeric_2d, validate_numeric_2d_with_dtype
+from rsklearn.base import BaseEstimator, TransformerMixin
+from rsklearn.utils.validation import check_is_fitted
 
 
-class StandardScaler(EstimatorMixin):
+class StandardScaler(TransformerMixin, BaseEstimator):
     """Standardize each feature using population mean and variance.
 
     NaNs are ignored while fitting and preserved while transforming. Infinity
@@ -26,11 +22,12 @@ class StandardScaler(EstimatorMixin):
     """
 
     _parameter_names = ("with_mean", "with_std")
+    _rsklearn_input_tags = {"allow_nan": True}
+    _rsklearn_preserves_dtype = ["float64", "float32"]
 
     def __init__(self, *, with_mean: bool = True, with_std: bool = True) -> None:
         self.with_mean = with_mean
         self.with_std = with_std
-        self._validate_params()
 
     def _validate_params(self) -> None:
         if not isinstance(self.with_mean, bool) or not isinstance(self.with_std, bool):
@@ -56,17 +53,15 @@ class StandardScaler(EstimatorMixin):
     def partial_fit(self, X: Any, y: Any = None) -> StandardScaler:
         """Update feature statistics from a batch and return self."""
         del y
-        array = validate_numeric_2d(X, estimator=type(self).__name__)
-        if hasattr(self, "n_features_in_"):
-            check_feature_count(
-                array, self.n_features_in_, estimator=type(self).__name__
-            )
+        self._validate_params()
+        already_fitted = hasattr(self, "n_features_in_")
+        array = validate_numeric_2d(X, estimator=self, reset=not already_fitted)
+        if already_fitted:
             mean, variance, scale, counts = _core.standard_merge(
                 self._mean_state, self._variance_state, self._counts, array
             )
         else:
             mean, variance, scale, counts = _core.standard_fit(array)
-            self.n_features_in_ = array.shape[1]
         self._mean_state = mean
         self._variance_state = variance
         self._counts = counts
@@ -80,11 +75,11 @@ class StandardScaler(EstimatorMixin):
 
     def transform(self, X: Any) -> NDArray[np.float64]:
         """Standardize X using fitted statistics."""
-        self._check_fitted("n_features_in_")
+        self._validate_params()
+        check_is_fitted(self, "n_features_in_")
         array, output_dtype = validate_numeric_2d_with_dtype(
-            X, estimator=type(self).__name__
+            X, estimator=self, reset=False
         )
-        check_feature_count(array, self.n_features_in_, estimator=type(self).__name__)
         mean = self.mean_ if self.mean_ is not None else np.zeros(self.n_features_in_)
         scale = self.scale_ if self.scale_ is not None else np.ones(self.n_features_in_)
         output = _core.standard_transform(
@@ -92,17 +87,13 @@ class StandardScaler(EstimatorMixin):
         )
         return output.astype(output_dtype, copy=False)
 
-    def fit_transform(self, X: Any, y: Any = None) -> NDArray[np.float64]:
-        """Fit to X and return its standardized representation."""
-        return self.fit(X, y).transform(X)
-
     def inverse_transform(self, X: Any) -> NDArray[np.float64]:
         """Undo standardization."""
-        self._check_fitted("n_features_in_")
+        self._validate_params()
+        check_is_fitted(self, "n_features_in_")
         array, output_dtype = validate_numeric_2d_with_dtype(
-            X, estimator=type(self).__name__
+            X, estimator=self, reset=False
         )
-        check_feature_count(array, self.n_features_in_, estimator=type(self).__name__)
         mean = self.mean_ if self.mean_ is not None else np.zeros(self.n_features_in_)
         scale = self.scale_ if self.scale_ is not None else np.ones(self.n_features_in_)
         output = _core.standard_transform(

@@ -3,6 +3,7 @@
 mod error;
 mod label_encoder;
 mod minmax_scaler;
+mod normalizer;
 mod standard_scaler;
 
 use numpy::ndarray::Array2;
@@ -30,6 +31,17 @@ fn array2_output<'py>(
     rows: usize,
     cols: usize,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let array = Array2::from_shape_vec((rows, cols), values)
+        .map_err(|_| error::CoreError::ShapeMismatch)?;
+    Ok(array.into_pyarray(py))
+}
+
+fn array2_output_f32<'py>(
+    py: Python<'py>,
+    values: Vec<f32>,
+    rows: usize,
+    cols: usize,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
     let array = Array2::from_shape_vec((rows, cols), values)
         .map_err(|_| error::CoreError::ShapeMismatch)?;
     Ok(array.into_pyarray(py))
@@ -159,6 +171,32 @@ fn minmax_transform<'py>(
         )
     })?;
     array2_output(py, output, shape[0], shape[1])
+}
+
+#[pyfunction]
+fn normalize_f64<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    norm: &str,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let norm = normalizer::Norm::try_from(norm)?;
+    let output = py.detach(|| normalizer::transform(values, shape[0], shape[1], norm))?;
+    array2_output(py, output, shape[0], shape[1])
+}
+
+#[pyfunction]
+fn normalize_f32<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f32>,
+    norm: &str,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let norm = normalizer::Norm::try_from(norm)?;
+    let output = py.detach(|| normalizer::transform(values, shape[0], shape[1], norm))?;
+    array2_output_f32(py, output, shape[0], shape[1])
 }
 
 #[pyfunction]
@@ -325,6 +363,8 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(standard_transform, module)?)?;
     module.add_function(wrap_pyfunction!(minmax_fit, module)?)?;
     module.add_function(wrap_pyfunction!(minmax_transform, module)?)?;
+    module.add_function(wrap_pyfunction!(normalize_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(normalize_f32, module)?)?;
     module.add_function(wrap_pyfunction!(label_fit_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_inverse_numeric, module)?)?;

@@ -54,9 +54,9 @@ def test_standard_scaler_fitted_and_feature_checks():
     with pytest.raises(ValueError, match="not fitted"):
         StandardScaler().transform([[1.0]])
     scaler = StandardScaler().fit([[1.0, 2.0]])
-    with pytest.raises(ValueError, match="expected 2 features"):
+    with pytest.raises(ValueError, match="expecting 2 features"):
         scaler.transform([[1.0]])
-    with pytest.raises(ValueError, match="expected 2 features"):
+    with pytest.raises(ValueError, match="expecting 2 features"):
         scaler.partial_fit([[1.0]])
 
 
@@ -67,4 +67,4 @@ def test_standard_scaler_params_and_repr():
     with pytest.raises(ValueError, match="Invalid parameter"):
         scaler.set_params(no_such_parameter=True)
     with pytest.raises(TypeError, match="must be bool"):
-        StandardScaler(with_mean=1)
+        StandardScaler(with_mean=1).fit([[1.0]])

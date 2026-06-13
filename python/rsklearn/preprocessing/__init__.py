@@ -2,6 +2,7 @@
 
 from ._label_encoder import LabelEncoder
 from ._minmax_scaler import MinMaxScaler
+from ._normalizer import Normalizer
 from ._standard_scaler import StandardScaler
 
-__all__ = ["LabelEncoder", "MinMaxScaler", "StandardScaler"]
+__all__ = ["LabelEncoder", "MinMaxScaler", "Normalizer", "StandardScaler"]

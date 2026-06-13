@@ -13,7 +13,7 @@ def test_numeric_input_must_be_2d(estimator, value):
 @pytest.mark.parametrize("estimator", [StandardScaler(), MinMaxScaler()])
 @pytest.mark.parametrize("value", [np.empty((0, 2)), np.empty((2, 0))])
 def test_numeric_input_must_not_be_empty(estimator, value):
-    with pytest.raises(ValueError, match="at least one sample and one feature"):
+    with pytest.raises(ValueError, match=r"(minimum of 1|minimum 1)"):
         estimator.fit(value)
 
 
