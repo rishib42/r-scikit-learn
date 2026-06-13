@@ -1,0 +1,214 @@
+#![forbid(unsafe_code)]
+
+mod error;
+mod label_encoder;
+mod minmax_scaler;
+mod standard_scaler;
+
+use numpy::ndarray::Array2;
+use numpy::{
+    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
+};
+use pyo3::prelude::*;
+
+type FloatArray1<'py> = Bound<'py, PyArray1<f64>>;
+type ThreeFloatArrays<'py> = (FloatArray1<'py>, FloatArray1<'py>, FloatArray1<'py>);
+
+fn array2_output<'py>(
+    py: Python<'py>,
+    values: Vec<f64>,
+    rows: usize,
+    cols: usize,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let array = Array2::from_shape_vec((rows, cols), values)
+        .map_err(|_| error::CoreError::ShapeMismatch)?;
+    Ok(array.into_pyarray(py))
+}
+
+#[pyfunction]
+fn standard_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+) -> PyResult<ThreeFloatArrays<'py>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let stats = py.detach(|| standard_scaler::fit(values, shape[0], shape[1]))?;
+    Ok((
+        stats.mean.into_pyarray(py),
+        stats.variance.into_pyarray(py),
+        stats.scale.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, mean, scale, with_mean, with_std, inverse=false))]
+fn standard_transform<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    mean: PyReadonlyArray1<'py, f64>,
+    scale: PyReadonlyArray1<'py, f64>,
+    with_mean: bool,
+    with_std: bool,
+    inverse: bool,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let mean = mean.as_slice()?;
+    let scale = scale.as_slice()?;
+    let output = py.detach(|| {
+        standard_scaler::transform(
+            values, shape[0], shape[1], mean, scale, with_mean, with_std, inverse,
+        )
+    })?;
+    array2_output(py, output, shape[0], shape[1])
+}
+
+#[pyfunction]
+fn minmax_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+) -> PyResult<ThreeFloatArrays<'py>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let stats = py.detach(|| minmax_scaler::fit(values, shape[0], shape[1]))?;
+    Ok((
+        stats.data_min.into_pyarray(py),
+        stats.data_max.into_pyarray(py),
+        stats.data_range.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, scale, min, output_low, output_high, clip, inverse=false))]
+#[allow(clippy::too_many_arguments)]
+fn minmax_transform<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    scale: PyReadonlyArray1<'py, f64>,
+    min: PyReadonlyArray1<'py, f64>,
+    output_low: f64,
+    output_high: f64,
+    clip: bool,
+    inverse: bool,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let scale = scale.as_slice()?;
+    let min = min.as_slice()?;
+    let output = py.detach(|| {
+        minmax_scaler::transform(
+            values,
+            shape[0],
+            shape[1],
+            scale,
+            min,
+            output_low,
+            output_high,
+            clip,
+            inverse,
+        )
+    })?;
+    array2_output(py, output, shape[0], shape[1])
+}
+
+#[pyfunction]
+fn label_fit_transform_numeric<'py>(
+    py: Python<'py>,
+    values: Vec<f64>,
+) -> (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<i64>>) {
+    let (classes, encoded) = py.detach(|| label_encoder::fit_transform_numeric(&values));
+    (classes.into_pyarray(py), encoded.into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_transform_numeric<'py>(
+    py: Python<'py>,
+    values: Vec<f64>,
+    classes: Vec<f64>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    Ok(py
+        .detach(|| label_encoder::transform_numeric(&values, &classes))?
+        .into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_inverse_numeric<'py>(
+    py: Python<'py>,
+    codes: Vec<i64>,
+    classes: Vec<f64>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    Ok(py
+        .detach(|| label_encoder::inverse_numeric(&codes, &classes))?
+        .into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_fit_transform_strings<'py>(
+    py: Python<'py>,
+    values: Vec<String>,
+) -> (Vec<String>, Bound<'py, PyArray1<i64>>) {
+    let (classes, encoded) = py.detach(|| label_encoder::fit_transform_strings(&values));
+    (classes, encoded.into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_fit_transform_unicode<'py>(
+    py: Python<'py>,
+    codepoints: PyReadonlyArray2<'py, u32>,
+) -> PyResult<(Vec<String>, Bound<'py, PyArray1<i64>>)> {
+    let shape = codepoints.shape();
+    let values = codepoints.as_slice()?;
+    let (classes, encoded) =
+        py.detach(|| label_encoder::fit_transform_unicode(values, shape[0], shape[1]))?;
+    Ok((classes, encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn label_transform_strings(
+    py: Python<'_>,
+    values: Vec<String>,
+    classes: Vec<String>,
+) -> PyResult<Vec<i64>> {
+    py.detach(|| label_encoder::transform_strings(&values, &classes))
+        .map_err(Into::into)
+}
+
+#[pyfunction]
+fn label_transform_unicode<'py>(
+    py: Python<'py>,
+    codepoints: PyReadonlyArray2<'py, u32>,
+    classes: Vec<String>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    let shape = codepoints.shape();
+    let values = codepoints.as_slice()?;
+    Ok(py
+        .detach(|| label_encoder::transform_unicode(values, shape[0], shape[1], &classes))?
+        .into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_inverse_strings(
+    py: Python<'_>,
+    codes: Vec<i64>,
+    classes: Vec<String>,
+) -> PyResult<Vec<String>> {
+    py.detach(|| label_encoder::inverse_strings(&codes, &classes))
+        .map_err(Into::into)
+}
+
+#[pymodule]
+fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(standard_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(standard_transform, module)?)?;
+    module.add_function(wrap_pyfunction!(minmax_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(minmax_transform, module)?)?;
+    module.add_function(wrap_pyfunction!(label_fit_transform_numeric, module)?)?;
+    module.add_function(wrap_pyfunction!(label_transform_numeric, module)?)?;
+    module.add_function(wrap_pyfunction!(label_inverse_numeric, module)?)?;
+    module.add_function(wrap_pyfunction!(label_fit_transform_strings, module)?)?;
+    module.add_function(wrap_pyfunction!(label_fit_transform_unicode, module)?)?;
+    module.add_function(wrap_pyfunction!(label_transform_strings, module)?)?;
+    module.add_function(wrap_pyfunction!(label_transform_unicode, module)?)?;
+    module.add_function(wrap_pyfunction!(label_inverse_strings, module)?)?;
+    Ok(())
+}

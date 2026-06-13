@@ -1,0 +1,12 @@
+/target/
+/dist/
+/.venv/
+/smoke-venv/
+/goal.md
+/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+*.so
+*.pyd
+__pycache__/
+.pytest_cache/
+.ruff_cache/
