@@ -14,6 +14,7 @@ from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
     Normalizer,
+    OneHotEncoder,
     OrdinalEncoder,
     RobustScaler,
     StandardScaler,
@@ -26,6 +27,7 @@ from scipy import sparse
 from sklearn.preprocessing import LabelEncoder as ScikitLabelEncoder
 from sklearn.preprocessing import MinMaxScaler as ScikitMinMaxScaler
 from sklearn.preprocessing import Normalizer as ScikitNormalizer
+from sklearn.preprocessing import OneHotEncoder as ScikitOneHotEncoder
 from sklearn.preprocessing import OrdinalEncoder as ScikitOrdinalEncoder
 from sklearn.preprocessing import RobustScaler as ScikitRobustScaler
 from sklearn.preprocessing import StandardScaler as ScikitStandardScaler
@@ -166,6 +168,8 @@ def benchmark_categories(repetitions: int) -> None:
         state, _ = discover_categories(X, estimator=ours_estimator)
         theirs = ScikitOrdinalEncoder().fit(X)
         ours_public = OrdinalEncoder().fit(X)
+        ours_one_hot = OneHotEncoder().fit(X)
+        theirs_one_hot = ScikitOneHotEncoder().fit(X)
         report_comparison(
             f"Category discovery + encoding {category_type}",
             lambda values=X: discover_categories(
@@ -192,6 +196,18 @@ def benchmark_categories(repetitions: int) -> None:
             f"OrdinalEncoder transform {category_type}",
             lambda values=X, encoder=ours_public: encoder.transform(values),
             lambda values=X, encoder=theirs: encoder.transform(values),
+            repetitions,
+        )
+        report_comparison(
+            f"OneHotEncoder fit_transform {category_type}",
+            lambda values=X: OneHotEncoder().fit_transform(values),
+            lambda values=X: ScikitOneHotEncoder().fit_transform(values),
+            repetitions,
+        )
+        report_comparison(
+            f"OneHotEncoder transform {category_type}",
+            lambda values=X, encoder=ours_one_hot: encoder.transform(values),
+            lambda values=X, encoder=theirs_one_hot: encoder.transform(values),
             repetitions,
         )
 

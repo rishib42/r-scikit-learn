@@ -163,6 +163,22 @@ fn sparse_scale_csr_i64_f32(
 }
 
 #[pyfunction]
+fn one_hot_csr<'py>(
+    py: Python<'py>,
+    codes: PyReadonlyArray2<'py, i64>,
+    widths: PyReadonlyArray1<'py, i64>,
+    drops: PyReadonlyArray1<'py, i64>,
+) -> PyResult<(IntArray1<'py>, IntArray1<'py>)> {
+    let shape = codes.shape();
+    let codes = codes.as_slice()?;
+    let widths = widths.as_slice()?;
+    let drops = drops.as_slice()?;
+    let (indices, indptr) =
+        py.detach(|| sparse::one_hot_csr(codes, shape[0], shape[1], widths, drops))?;
+    Ok((indices.into_pyarray(py), indptr.into_pyarray(py)))
+}
+
+#[pyfunction]
 fn standard_fit<'py>(
     py: Python<'py>,
     input: PyReadonlyArray2<'py, f64>,
@@ -774,6 +790,7 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(sparse_scale_csr_i64_f64, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_scale_csr_i32_f32, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_scale_csr_i64_f32, module)?)?;
+    module.add_function(wrap_pyfunction!(one_hot_csr, module)?)?;
     module.add_function(wrap_pyfunction!(standard_fit, module)?)?;
     module.add_function(wrap_pyfunction!(standard_merge, module)?)?;
     module.add_function(wrap_pyfunction!(standard_transform, module)?)?;

@@ -140,7 +140,7 @@ def scale_sparse_columns(
 
 
 def sparse_from_components(
-    components: SparseComponents, *, canonicalize: bool = True
+    components: SparseComponents, *, canonicalize: bool = True, validate: bool = True
 ) -> Any:
     """Construct a validated SciPy CSR/CSC matrix from compressed components."""
     if components.format not in ("csr", "csc"):
@@ -160,13 +160,14 @@ def sparse_from_components(
     major_dimension, minor_dimension = (
         components.shape if components.format == "csr" else components.shape[::-1]
     )
-    _validate_component_arrays(
-        components.indices,
-        components.indptr,
-        major_dimension,
-        minor_dimension,
-        data.size,
-    )
+    if validate:
+        _validate_component_arrays(
+            components.indices,
+            components.indptr,
+            major_dimension,
+            minor_dimension,
+            data.size,
+        )
     from scipy import sparse
 
     constructor = sparse.csr_matrix if components.format == "csr" else sparse.csc_matrix
@@ -179,7 +180,8 @@ def sparse_from_components(
         shape=components.shape,
         copy=False,
     )
-    validate_compressed_structure(matrix)
+    if validate:
+        validate_compressed_structure(matrix)
     if canonicalize:
         matrix.sum_duplicates()
         matrix.sort_indices()

@@ -4,6 +4,7 @@ import pytest
 from rsklearn.preprocessing import (
     MinMaxScaler,
     Normalizer,
+    OneHotEncoder,
     OrdinalEncoder,
     RobustScaler,
     StandardScaler,
@@ -18,6 +19,7 @@ sklearn_checks = pytest.importorskip("sklearn.utils.estimator_checks")
         StandardScaler(),
         MinMaxScaler(),
         Normalizer(),
+        OneHotEncoder(),
         RobustScaler(),
         OrdinalEncoder(),
     ],

@@ -66,6 +66,44 @@ where
     Ok(())
 }
 
+pub fn one_hot_csr(
+    codes: &[i64],
+    rows: usize,
+    features: usize,
+    widths: &[i64],
+    drops: &[i64],
+) -> Result<(Vec<i64>, Vec<i64>), CoreError> {
+    if codes.len() != rows * features || widths.len() != features || drops.len() != features {
+        return Err(CoreError::ShapeMismatch);
+    }
+    let mut offsets = Vec::with_capacity(features);
+    let mut offset = 0_i64;
+    for (&width, &drop) in widths.iter().zip(drops) {
+        if width < 0 || drop >= width {
+            return Err(CoreError::InvalidCode(drop));
+        }
+        offsets.push(offset);
+        offset += width - i64::from(drop >= 0);
+    }
+    let mut indices = Vec::with_capacity(codes.len());
+    let mut indptr = Vec::with_capacity(rows + 1);
+    indptr.push(0);
+    for row in codes.chunks_exact(features) {
+        for (feature, &code) in row.iter().enumerate() {
+            if code < 0 || code == drops[feature] {
+                continue;
+            }
+            if code >= widths[feature] {
+                return Err(CoreError::InvalidCode(code));
+            }
+            let shifted = code - i64::from(drops[feature] >= 0 && code > drops[feature]);
+            indices.push(offsets[feature] + shifted);
+        }
+        indptr.push(indices.len() as i64);
+    }
+    Ok((indices, indptr))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,5 +122,12 @@ mod tests {
         assert_eq!(values, vec![2.0, 4.0]);
         scale_csr_columns_in_place(&mut values, &[1_i64, 0], &[2.0, 3.0], true).unwrap();
         assert_eq!(values, vec![6.0, 8.0]);
+    }
+
+    #[test]
+    fn builds_one_hot_csr_with_unknowns_and_drops() {
+        let (indices, indptr) = one_hot_csr(&[0, 1, 1, -1, 2, 0], 3, 2, &[3, 2], &[-1, 0]).unwrap();
+        assert_eq!(indices, vec![0, 3, 1, 2]);
+        assert_eq!(indptr, vec![0, 2, 3, 4]);
     }
 }

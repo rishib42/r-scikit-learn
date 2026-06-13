@@ -3,7 +3,7 @@
 `r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
 computational core and lightweight Python estimator classes. Version 0.1.0
 provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
-`LabelEncoder`, and `OrdinalEncoder`.
+`LabelEncoder`, `OrdinalEncoder`, and `OneHotEncoder`.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -83,6 +83,13 @@ encoder = OrdinalEncoder(
 X_encoded = encoder.fit_transform([["small"], ["large"], ["small"]])
 ```
 
+```python
+from rsklearn.preprocessing import OneHotEncoder
+
+encoder = OneHotEncoder(handle_unknown="ignore")
+X_one_hot = encoder.fit_transform([["small"], ["large"], ["small"]])
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -127,6 +134,8 @@ categories, unknown masks, mixed-type validation, and feature-name checks for
 categorical encoders. `OrdinalEncoder` uses this layer and supports explicit or
 automatically discovered categories, unknown and missing-value encoding,
 infrequent-category grouping, inverse transforms, and output feature names.
+`OneHotEncoder` adds native Rust CSR construction, sparse or dense output,
+category dropping, unknown handling, inverse transforms, and feature names.
 
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is
@@ -200,7 +209,7 @@ The release workflow uses PyPI Trusted Publishing and contains no API token.
 ## Roadmap
 
 - Close the remaining production gaps listed above.
-- Add sparse infrastructure and `OneHotEncoder`.
+- Add sparse-aware behavior to compatible existing estimators.
 - Add further categorical encoding and discretization estimators.
 - Publish reproducible benchmark reports from release wheels.
 
