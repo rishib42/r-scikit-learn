@@ -16,10 +16,21 @@ pub fn fit(data: &[f64], rows: usize, cols: usize) -> Result<MinMaxStats, CoreEr
     }
     let mut data_min = vec![f64::INFINITY; cols];
     let mut data_max = vec![f64::NEG_INFINITY; cols];
+    let mut counts = vec![0; cols];
     for row in data.chunks_exact(cols) {
         for (column, &value) in row.iter().enumerate() {
+            if value.is_nan() {
+                continue;
+            }
+            counts[column] += 1;
             data_min[column] = data_min[column].min(value);
             data_max[column] = data_max[column].max(value);
+        }
+    }
+    for column in 0..cols {
+        if counts[column] == 0 {
+            data_min[column] = f64::NAN;
+            data_max[column] = f64::NAN;
         }
     }
     let data_range = data_max
@@ -76,5 +87,12 @@ mod tests {
         assert_eq!(stats.data_min, vec![1.0, -2.0]);
         assert_eq!(stats.data_max, vec![3.0, 4.0]);
         assert_eq!(stats.data_range, vec![2.0, 6.0]);
+    }
+
+    #[test]
+    fn ignores_nan_values() {
+        let stats = fit(&[1.0, f64::NAN, 3.0, 4.0], 2, 2).unwrap();
+        assert_eq!(stats.data_min, vec![1.0, 4.0]);
+        assert_eq!(stats.data_max, vec![3.0, 4.0]);
     }
 }

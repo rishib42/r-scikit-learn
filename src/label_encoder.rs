@@ -78,6 +78,44 @@ pub fn fit_transform_numeric(values: &[f64]) -> (Vec<f64>, Vec<i64>) {
     (classes, encoded)
 }
 
+pub fn fit_transform_ordered<T: Ord + Copy>(values: &[T]) -> (Vec<T>, Vec<i64>) {
+    let mut classes = values.to_vec();
+    classes.sort();
+    classes.dedup();
+    let encoded = values
+        .iter()
+        .map(|value| classes.partition_point(|candidate| candidate < value) as i64)
+        .collect();
+    (classes, encoded)
+}
+
+pub fn transform_ordered<T: Ord + Copy + ToString>(
+    values: &[T],
+    classes: &[T],
+) -> Result<Vec<i64>, CoreError> {
+    values
+        .iter()
+        .map(|value| {
+            classes
+                .binary_search(value)
+                .map(|index| index as i64)
+                .map_err(|_| CoreError::UnknownLabel(value.to_string()))
+        })
+        .collect()
+}
+
+pub fn inverse_ordered<T: Copy>(codes: &[i64], classes: &[T]) -> Result<Vec<T>, CoreError> {
+    codes
+        .iter()
+        .map(|&code| {
+            usize::try_from(code)
+                .ok()
+                .and_then(|index| classes.get(index).copied())
+                .ok_or(CoreError::InvalidCode(code))
+        })
+        .collect()
+}
+
 pub fn transform_numeric(values: &[f64], classes: &[f64]) -> Result<Vec<i64>, CoreError> {
     values
         .iter()
@@ -154,6 +192,17 @@ mod tests {
     #[test]
     fn rejects_unknown_numeric_label() {
         assert!(transform_numeric(&[3.0], &[1.0, 2.0]).is_err());
+    }
+
+    #[test]
+    fn preserves_large_ordered_integer_labels() {
+        let values = [9_007_199_254_740_993_i64, 9_007_199_254_740_992_i64];
+        let (classes, encoded) = fit_transform_ordered(&values);
+        assert_eq!(
+            classes,
+            vec![9_007_199_254_740_992_i64, 9_007_199_254_740_993_i64]
+        );
+        assert_eq!(encoded, vec![1, 0]);
     }
 
     #[test]

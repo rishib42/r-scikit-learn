@@ -1,8 +1,8 @@
 # r-scikit-learn
 
-`r-scikit-learn` is an experimental MVP of scikit-learn-style preprocessing
-with a safe Rust computational core and lightweight Python estimator classes.
-Version 0.1.0 provides `StandardScaler`, `MinMaxScaler`, and `LabelEncoder`.
+`r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
+computational core and lightweight Python estimator classes. Version 0.1.0
+provides `StandardScaler`, `MinMaxScaler`, and `LabelEncoder`.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -60,17 +60,22 @@ encoded = encoder.fit_transform(["café", "東京", "café"])
 labels = encoder.inverse_transform(encoded)
 ```
 
-## Supported Inputs And Limitations
+## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
-array-like numeric input. They convert input to contiguous float64 NumPy
-arrays, reject NaN and infinity, return new float64 arrays, and do not mutate
-input. Sparse arrays and incremental fitting are not supported.
+array-like numeric input. Inputs are converted to contiguous float64 arrays for
+the Rust core. Transforming float32 input returns float32 output; other numeric
+input returns float64 output. NaNs are ignored while fitting and preserved
+while transforming. Infinity is rejected. Inputs are not mutated.
 
-`LabelEncoder` accepts non-empty one-dimensional homogeneous integer,
-floating-point, or UTF-8 string labels. It rejects booleans, mixed labels,
-NaN, and infinity. The MVP uses a float64 Rust pathway for all numeric labels,
-so integer labels outside float64's exact integer range are not supported.
+`StandardScaler` and `MinMaxScaler` support incremental updates through
+`partial_fit`.
+
+`LabelEncoder` accepts one-dimensional signed integer, unsigned integer,
+floating-point, boolean, or UTF-8 string labels. Empty labels, NaN, infinity,
+and values across the full int64/uint64 ranges are supported. Integer class
+values preserve their input dtype.
+
 Contiguous NumPy Unicode arrays are exposed to safe Rust as fixed-width
 codepoint rows, avoiding per-label Python string conversion in the hot path.
 
@@ -84,8 +89,20 @@ when `with_std=False`.
 The supported behavior is differential-tested against scikit-learn, including
 population variance, constant features, non-default feature ranges, clipping,
 round trips, and sorted label classes. `r-scikit-learn` is intentionally much
-smaller and does not claim general API compatibility beyond the documented
-MVP.
+smaller and does not yet claim complete estimator API compatibility.
+
+## Current Production Gaps
+
+The core implemented behavior is tested and packaged across Linux, macOS, and
+Windows, but the project remains alpha software. Before a stable 1.0 release,
+the following compatibility and operational work remains:
+
+- Sparse matrix support, including non-centering `StandardScaler` operation.
+- `sample_weight` support for `StandardScaler.partial_fit`.
+- DataFrame feature-name tracking and `get_feature_names_out`.
+- Configurable output containers and scikit-learn estimator-check compliance.
+- A best-effort `copy=False` API and native float32 Rust kernels.
+- Broader fuzz, property, memory-pressure, and long-running benchmark coverage.
 
 No performance claim is made. Run:
 
@@ -105,6 +122,7 @@ maturin develop --extras dev
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+ruff format --check python tests benches
 ruff check python tests benches
 pytest
 maturin build --release
@@ -130,10 +148,9 @@ The release workflow uses PyPI Trusted Publishing and contains no API token.
 
 ## Roadmap
 
-- Preserve integer label dtype and support integers beyond float64 precision.
-- Add sparse input and missing-value policies.
-- Add incremental statistics and more preprocessing estimators.
-- Publish benchmark results only after reproducible release-wheel measurements.
+- Close the remaining production gaps listed above.
+- Add robust scaling, encoding, and discretization estimators.
+- Publish reproducible benchmark reports from release wheels.
 
 ## License
 

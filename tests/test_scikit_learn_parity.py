@@ -46,7 +46,18 @@ def test_minmax_scaler_parity(feature_range, clip):
 
 
 @pytest.mark.parametrize(
-    "labels", [[3, -1, 3, 2], [1.5, -2.0, 1.5], ["東京", "café", "東京"]]
+    "labels",
+    [
+        [3, -1, 3, 2],
+        [1.5, -2.0, 1.5],
+        ["東京", "café", "東京"],
+        [True, False, True],
+        [1, "a"],
+        [1.0, np.nan, np.inf],
+        np.array([2**53, 2**53 + 1], dtype=np.int64),
+        np.array([2**63, 2**63 + 1], dtype=np.uint64),
+        [],
+    ],
 )
 def test_label_encoder_parity(labels):
     ours = LabelEncoder()
@@ -73,3 +84,26 @@ def test_randomized_scaler_parity():
             rtol=1e-11,
             atol=1e-11,
         )
+
+
+@pytest.mark.parametrize(
+    "ours_class,theirs_class",
+    [
+        (StandardScaler, ScikitStandardScaler),
+        (MinMaxScaler, ScikitMinMaxScaler),
+    ],
+)
+def test_nan_dtype_and_partial_fit_parity(ours_class, theirs_class):
+    X = np.asarray(
+        [[1.0, np.nan, np.nan], [2.0, 4.0, np.nan], [5.0, 8.0, np.nan]],
+        dtype=np.float32,
+    )
+    ours = ours_class().partial_fit(X[:1]).partial_fit(X[1:])
+    theirs = theirs_class().partial_fit(X[:1]).partial_fit(X[1:])
+    ours_transformed = ours.transform(X)
+    theirs_transformed = theirs.transform(X)
+    assert ours_transformed.dtype == theirs_transformed.dtype == np.float32
+    np.testing.assert_allclose(
+        ours_transformed, theirs_transformed, rtol=1e-6, atol=1e-6, equal_nan=True
+    )
+    np.testing.assert_array_equal(ours.n_samples_seen_, theirs.n_samples_seen_)

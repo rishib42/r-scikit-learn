@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "r-scikit-learn"
 version = "0.1.0"
-description = "Experimental scikit-learn-style preprocessing powered by safe Rust"
+description = "High-performance scikit-learn-style preprocessing powered by safe Rust"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

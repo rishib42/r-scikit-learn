@@ -12,6 +12,16 @@ use numpy::{
 use pyo3::prelude::*;
 
 type FloatArray1<'py> = Bound<'py, PyArray1<f64>>;
+type IntArray1<'py> = Bound<'py, PyArray1<i64>>;
+type UIntArray1<'py> = Bound<'py, PyArray1<u64>>;
+type IntLabelOutput<'py> = (IntArray1<'py>, IntArray1<'py>);
+type UIntLabelOutput<'py> = (UIntArray1<'py>, IntArray1<'py>);
+type StandardFitOutput<'py> = (
+    FloatArray1<'py>,
+    FloatArray1<'py>,
+    FloatArray1<'py>,
+    Bound<'py, PyArray1<i64>>,
+);
 type ThreeFloatArrays<'py> = (FloatArray1<'py>, FloatArray1<'py>, FloatArray1<'py>);
 
 fn array2_output<'py>(
@@ -29,7 +39,7 @@ fn array2_output<'py>(
 fn standard_fit<'py>(
     py: Python<'py>,
     input: PyReadonlyArray2<'py, f64>,
-) -> PyResult<ThreeFloatArrays<'py>> {
+) -> PyResult<StandardFitOutput<'py>> {
     let shape = input.shape();
     let values = input.as_slice()?;
     let stats = py.detach(|| standard_scaler::fit(values, shape[0], shape[1]))?;
@@ -37,6 +47,46 @@ fn standard_fit<'py>(
         stats.mean.into_pyarray(py),
         stats.variance.into_pyarray(py),
         stats.scale.into_pyarray(py),
+        stats
+            .counts
+            .into_iter()
+            .map(|value| value as i64)
+            .collect::<Vec<_>>()
+            .into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+fn standard_merge<'py>(
+    py: Python<'py>,
+    previous_mean: PyReadonlyArray1<'py, f64>,
+    previous_variance: PyReadonlyArray1<'py, f64>,
+    previous_counts: PyReadonlyArray1<'py, i64>,
+    input: PyReadonlyArray2<'py, f64>,
+) -> PyResult<StandardFitOutput<'py>> {
+    let shape = input.shape();
+    let previous_mean = previous_mean.as_slice()?;
+    let previous_variance = previous_variance.as_slice()?;
+    let input = input.as_slice()?;
+    let previous_counts: Vec<usize> = previous_counts
+        .as_slice()?
+        .iter()
+        .map(|&value| usize::try_from(value).map_err(|_| error::CoreError::ShapeMismatch))
+        .collect::<Result<_, _>>()?;
+    let stats = py.detach(|| {
+        let batch = standard_scaler::fit(input, shape[0], shape[1])?;
+        standard_scaler::merge(previous_mean, previous_variance, &previous_counts, &batch)
+    })?;
+    Ok((
+        stats.mean.into_pyarray(py),
+        stats.variance.into_pyarray(py),
+        stats.scale.into_pyarray(py),
+        stats
+            .counts
+            .into_iter()
+            .map(|value| value as i64)
+            .collect::<Vec<_>>()
+            .into_pyarray(py),
     ))
 }
 
@@ -143,6 +193,78 @@ fn label_inverse_numeric<'py>(
 }
 
 #[pyfunction]
+fn label_fit_transform_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, i64>,
+) -> PyResult<IntLabelOutput<'py>> {
+    let values = values.as_slice()?;
+    let (classes, encoded) = py.detach(|| label_encoder::fit_transform_ordered(values));
+    Ok((classes.into_pyarray(py), encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn label_transform_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, i64>,
+    classes: PyReadonlyArray1<'py, i64>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    let values = values.as_slice()?;
+    let classes = classes.as_slice()?;
+    Ok(py
+        .detach(|| label_encoder::transform_ordered(values, classes))?
+        .into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_inverse_i64<'py>(
+    py: Python<'py>,
+    codes: PyReadonlyArray1<'py, i64>,
+    classes: PyReadonlyArray1<'py, i64>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    let codes = codes.as_slice()?;
+    let classes = classes.as_slice()?;
+    Ok(py
+        .detach(|| label_encoder::inverse_ordered(codes, classes))?
+        .into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_fit_transform_u64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, u64>,
+) -> PyResult<UIntLabelOutput<'py>> {
+    let values = values.as_slice()?;
+    let (classes, encoded) = py.detach(|| label_encoder::fit_transform_ordered(values));
+    Ok((classes.into_pyarray(py), encoded.into_pyarray(py)))
+}
+
+#[pyfunction]
+fn label_transform_u64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, u64>,
+    classes: PyReadonlyArray1<'py, u64>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    let values = values.as_slice()?;
+    let classes = classes.as_slice()?;
+    Ok(py
+        .detach(|| label_encoder::transform_ordered(values, classes))?
+        .into_pyarray(py))
+}
+
+#[pyfunction]
+fn label_inverse_u64<'py>(
+    py: Python<'py>,
+    codes: PyReadonlyArray1<'py, i64>,
+    classes: PyReadonlyArray1<'py, u64>,
+) -> PyResult<Bound<'py, PyArray1<u64>>> {
+    let codes = codes.as_slice()?;
+    let classes = classes.as_slice()?;
+    Ok(py
+        .detach(|| label_encoder::inverse_ordered(codes, classes))?
+        .into_pyarray(py))
+}
+
+#[pyfunction]
 fn label_fit_transform_strings<'py>(
     py: Python<'py>,
     values: Vec<String>,
@@ -199,12 +321,19 @@ fn label_inverse_strings(
 #[pymodule]
 fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(standard_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(standard_merge, module)?)?;
     module.add_function(wrap_pyfunction!(standard_transform, module)?)?;
     module.add_function(wrap_pyfunction!(minmax_fit, module)?)?;
     module.add_function(wrap_pyfunction!(minmax_transform, module)?)?;
     module.add_function(wrap_pyfunction!(label_fit_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_transform_numeric, module)?)?;
     module.add_function(wrap_pyfunction!(label_inverse_numeric, module)?)?;
+    module.add_function(wrap_pyfunction!(label_fit_transform_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(label_transform_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(label_inverse_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(label_fit_transform_u64, module)?)?;
+    module.add_function(wrap_pyfunction!(label_transform_u64, module)?)?;
+    module.add_function(wrap_pyfunction!(label_inverse_u64, module)?)?;
     module.add_function(wrap_pyfunction!(label_fit_transform_strings, module)?)?;
     module.add_function(wrap_pyfunction!(label_fit_transform_unicode, module)?)?;
     module.add_function(wrap_pyfunction!(label_transform_strings, module)?)?;

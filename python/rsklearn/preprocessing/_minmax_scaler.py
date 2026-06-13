@@ -9,7 +9,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from rsklearn import _core
-from rsklearn._validation import check_feature_count, validate_numeric_2d
+from rsklearn._validation import (
+    check_feature_count,
+    validate_numeric_2d,
+    validate_numeric_2d_with_dtype,
+)
 
 from ._base import EstimatorMixin
 
@@ -49,26 +53,56 @@ class MinMaxScaler(EstimatorMixin):
     def fit(self, X: Any, y: Any = None) -> MinMaxScaler:
         """Learn per-feature minimum and maximum and return self."""
         del y
+        for attribute in (
+            "min_",
+            "scale_",
+            "data_min_",
+            "data_max_",
+            "data_range_",
+            "n_features_in_",
+            "n_samples_seen_",
+        ):
+            if hasattr(self, attribute):
+                delattr(self, attribute)
+        return self.partial_fit(X)
+
+    def partial_fit(self, X: Any, y: Any = None) -> MinMaxScaler:
+        """Update per-feature minimum and maximum from a batch."""
+        del y
         self._validate_params()
         array = validate_numeric_2d(X, estimator=type(self).__name__)
-        self.data_min_, self.data_max_, self.data_range_ = _core.minmax_fit(array)
+        batch_min, batch_max, _ = _core.minmax_fit(array)
+        if hasattr(self, "n_features_in_"):
+            check_feature_count(
+                array, self.n_features_in_, estimator=type(self).__name__
+            )
+            self.data_min_ = np.minimum(self.data_min_, batch_min)
+            self.data_max_ = np.maximum(self.data_max_, batch_max)
+            self.n_samples_seen_ += array.shape[0]
+        else:
+            self.data_min_ = batch_min
+            self.data_max_ = batch_max
+            self.n_features_in_ = array.shape[1]
+            self.n_samples_seen_ = array.shape[0]
+        self.data_range_ = self.data_max_ - self.data_min_
         low, high = self.feature_range
         safe_range = np.where(self.data_range_ == 0.0, 1.0, self.data_range_)
         self.scale_ = (high - low) / safe_range
         self.min_ = low - self.data_min_ * self.scale_
-        self.n_features_in_ = array.shape[1]
-        self.n_samples_seen_ = array.shape[0]
         return self
 
     def transform(self, X: Any) -> NDArray[np.float64]:
         """Scale X using fitted feature ranges."""
         self._check_fitted("n_features_in_", "scale_", "min_")
-        array = validate_numeric_2d(X, estimator=type(self).__name__)
+        array, output_dtype = validate_numeric_2d_with_dtype(
+            X, estimator=type(self).__name__
+        )
         check_feature_count(array, self.n_features_in_, estimator=type(self).__name__)
         low, high = self.feature_range
-        return _core.minmax_transform(
+        output = _core.minmax_transform(
             array, self.scale_, self.min_, low, high, self.clip
         )
+        return output.astype(output_dtype, copy=False)
 
     def fit_transform(self, X: Any, y: Any = None) -> NDArray[np.float64]:
         """Fit to X and return its scaled representation."""
@@ -77,9 +111,12 @@ class MinMaxScaler(EstimatorMixin):
     def inverse_transform(self, X: Any) -> NDArray[np.float64]:
         """Undo min-max scaling."""
         self._check_fitted("n_features_in_", "scale_", "min_")
-        array = validate_numeric_2d(X, estimator=type(self).__name__)
+        array, output_dtype = validate_numeric_2d_with_dtype(
+            X, estimator=type(self).__name__
+        )
         check_feature_count(array, self.n_features_in_, estimator=type(self).__name__)
         low, high = self.feature_range
-        return _core.minmax_transform(
+        output = _core.minmax_transform(
             array, self.scale_, self.min_, low, high, False, inverse=True
         )
+        return output.astype(output_dtype, copy=False)

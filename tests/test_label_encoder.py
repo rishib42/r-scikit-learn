@@ -42,20 +42,44 @@ def test_unknown_and_invalid_codes_are_rejected():
 
 
 @pytest.mark.parametrize("labels", [[], np.array([])])
-def test_empty_labels_are_rejected(labels):
-    with pytest.raises(ValueError, match="at least one label"):
-        LabelEncoder().fit(labels)
+def test_empty_labels_are_supported(labels):
+    encoder = LabelEncoder()
+    np.testing.assert_array_equal(encoder.fit_transform(labels), [])
+    np.testing.assert_array_equal(encoder.classes_, [])
 
 
 def test_shape_type_and_fitted_validation():
     with pytest.raises(ValueError, match="1-dimensional"):
         LabelEncoder().fit([["a"], ["b"]])
-    with pytest.raises(TypeError, match="boolean"):
-        LabelEncoder().fit([True, False])
-    with pytest.raises(TypeError, match="homogeneous"):
-        LabelEncoder().fit([1, "a"])
     with pytest.raises(ValueError, match="not fitted"):
         LabelEncoder().transform(["a"])
+
+
+def test_boolean_mixed_and_non_finite_labels():
+    for labels in ([True, False, True], [1, "a"], [1.0, np.nan, np.inf]):
+        encoder = LabelEncoder()
+        encoded = encoder.fit_transform(labels)
+        np.testing.assert_array_equal(encoder.inverse_transform(encoded), labels)
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        np.array([2**53, 2**53 + 1], dtype=np.int64),
+        np.array([2**63, 2**63 + 1], dtype=np.uint64),
+        np.array([1, 2, 1], dtype=np.int32),
+    ],
+)
+def test_integer_labels_preserve_values_and_dtype(labels):
+    encoder = LabelEncoder()
+    encoded = encoder.fit_transform(labels)
+    assert encoder.classes_.dtype == labels.dtype
+    np.testing.assert_array_equal(encoder.inverse_transform(encoded), labels)
+
+
+def test_python_integer_outside_uint64_is_rejected():
+    with pytest.raises(ValueError, match="must fit"):
+        LabelEncoder().fit([2**100])
 
 
 def test_params_and_repr():

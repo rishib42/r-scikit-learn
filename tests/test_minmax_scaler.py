@@ -27,6 +27,16 @@ def test_minmax_outside_range_and_clip():
     )
 
 
+def test_minmax_partial_fit_matches_complete_fit():
+    X = np.array([[1.0, 3.0], [2.0, 4.0], [5.0, 8.0]])
+    incremental = MinMaxScaler().partial_fit(X[:2]).partial_fit(X[2:])
+    complete = MinMaxScaler().fit(X)
+    np.testing.assert_allclose(incremental.data_min_, complete.data_min_)
+    np.testing.assert_allclose(incremental.data_max_, complete.data_max_)
+    np.testing.assert_allclose(incremental.scale_, complete.scale_)
+    assert incremental.n_samples_seen_ == complete.n_samples_seen_
+
+
 @pytest.mark.parametrize(
     "kwargs,exception",
     [
@@ -51,3 +61,5 @@ def test_minmax_params_repr_and_state_checks():
     scaler.fit([[1.0, 2.0]])
     with pytest.raises(ValueError, match="expected 2 features"):
         scaler.transform([[1.0]])
+    with pytest.raises(ValueError, match="expected 2 features"):
+        scaler.partial_fit([[1.0]])

@@ -40,12 +40,24 @@ def test_standard_scaler_single_row():
     np.testing.assert_array_equal(scaler.scale_, [1.0, 1.0])
 
 
+def test_standard_scaler_partial_fit_matches_complete_fit():
+    X = np.array([[1.0, 3.0], [2.0, 4.0], [5.0, 8.0]])
+    incremental = StandardScaler().partial_fit(X[:2]).partial_fit(X[2:])
+    complete = StandardScaler().fit(X)
+    np.testing.assert_allclose(incremental.mean_, complete.mean_)
+    np.testing.assert_allclose(incremental.var_, complete.var_)
+    np.testing.assert_allclose(incremental.scale_, complete.scale_)
+    np.testing.assert_array_equal(incremental.n_samples_seen_, complete.n_samples_seen_)
+
+
 def test_standard_scaler_fitted_and_feature_checks():
     with pytest.raises(ValueError, match="not fitted"):
         StandardScaler().transform([[1.0]])
     scaler = StandardScaler().fit([[1.0, 2.0]])
     with pytest.raises(ValueError, match="expected 2 features"):
         scaler.transform([[1.0]])
+    with pytest.raises(ValueError, match="expected 2 features"):
+        scaler.partial_fit([[1.0]])
 
 
 def test_standard_scaler_params_and_repr():
