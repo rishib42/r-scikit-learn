@@ -9,6 +9,7 @@ from .base import (
 )
 from .compose import ColumnTransformer, make_column_transformer
 from .impute import SimpleImputer
+from .linear_model import ElasticNet, Lasso, LinearRegression, LogisticRegression, Ridge
 from .pipeline import Pipeline, make_pipeline
 from .preprocessing import (
     LabelEncoder,
@@ -24,13 +25,18 @@ __all__ = [
     "BaseEstimator",
     "ClassifierMixin",
     "ColumnTransformer",
+    "ElasticNet",
     "LabelEncoder",
+    "Lasso",
+    "LinearRegression",
+    "LogisticRegression",
     "MinMaxScaler",
     "Normalizer",
     "OneHotEncoder",
     "OrdinalEncoder",
     "Pipeline",
     "RegressorMixin",
+    "Ridge",
     "RobustScaler",
     "SimpleImputer",
     "StandardScaler",

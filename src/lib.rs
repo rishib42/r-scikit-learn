@@ -3,6 +3,7 @@
 mod categorical;
 mod error;
 mod label_encoder;
+mod linear_model;
 mod metrics;
 mod minmax_scaler;
 mod normalizer;
@@ -39,6 +40,29 @@ type RegressionReductionOutput<'py> = (
     FloatArray1<'py>,
     f64,
 );
+type LinearFitOutput<'py> = (Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>);
+type LogisticFitOutput<'py> = (
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    usize,
+    bool,
+);
+type CoordinateFitOutput<'py> = (
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    usize,
+    Bound<'py, PyArray1<f64>>,
+    bool,
+);
+
+#[pyfunction]
+fn build_profile() -> &'static str {
+    if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    }
+}
 
 fn array2_output<'py>(
     py: Python<'py>,
@@ -184,6 +208,253 @@ fn metric_regression_error_unweighted<'py>(
         metrics::regression_error_unweighted(expected, predicted, shape[0], shape[1], squared)
     })?;
     Ok(output.into_pyarray(py))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, targets, weights, alpha=0.0, fit_intercept=true))]
+fn linear_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    targets: PyReadonlyArray2<'py, f64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    alpha: f64,
+    fit_intercept: bool,
+) -> PyResult<LinearFitOutput<'py>> {
+    let shape = input.shape();
+    let target_shape = targets.shape();
+    if shape[0] != target_shape[0] {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let input = input.as_slice()?;
+    let targets = targets.as_slice()?;
+    let weights = weights.as_slice()?;
+    let fit = py.detach(|| {
+        linear_model::fit_linear(
+            input,
+            shape[0],
+            shape[1],
+            targets,
+            target_shape[1],
+            weights,
+            alpha,
+            fit_intercept,
+        )
+    })?;
+    Ok((
+        array2_output(py, fit.coefficients, target_shape[1], shape[1])?,
+        fit.intercepts.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+fn linear_predict<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    coefficients: PyReadonlyArray2<'py, f64>,
+    intercepts: PyReadonlyArray1<'py, f64>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = input.shape();
+    let coefficient_shape = coefficients.shape();
+    let input = input.as_slice()?;
+    let coefficients = coefficients.as_slice()?;
+    let intercepts = intercepts.as_slice()?;
+    let output = py.detach(|| {
+        linear_model::predict_linear(input, shape[0], shape[1], coefficients, intercepts)
+    })?;
+    array2_output(py, output, shape[0], coefficient_shape[0])
+}
+
+#[pyfunction]
+fn linear_all_finite(py: Python<'_>, input: PyReadonlyArray2<'_, f64>) -> PyResult<bool> {
+    let input = input.as_slice()?;
+    Ok(py.detach(|| linear_model::all_finite(input)))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, targets, weights, alpha, l1_ratio, fit_intercept, tolerance, max_iterations, positive))]
+#[allow(clippy::too_many_arguments)]
+fn linear_coordinate_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    targets: PyReadonlyArray2<'py, f64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    alpha: f64,
+    l1_ratio: f64,
+    fit_intercept: bool,
+    tolerance: f64,
+    max_iterations: usize,
+    positive: bool,
+) -> PyResult<CoordinateFitOutput<'py>> {
+    let shape = input.shape();
+    let target_shape = targets.shape();
+    if shape[0] != target_shape[0] {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let input = input.as_slice()?;
+    let targets = targets.as_slice()?;
+    let weights = weights.as_slice()?;
+    let fit = py.detach(|| {
+        linear_model::fit_coordinate_descent(
+            input,
+            shape[0],
+            shape[1],
+            targets,
+            target_shape[1],
+            weights,
+            alpha,
+            l1_ratio,
+            fit_intercept,
+            tolerance,
+            max_iterations,
+            positive,
+        )
+    })?;
+    Ok((
+        array2_output(py, fit.coefficients, target_shape[1], shape[1])?,
+        fit.intercepts.into_pyarray(py),
+        fit.iterations,
+        fit.dual_gaps.into_pyarray(py),
+        fit.converged,
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, targets, weights, alpha, l1_ratio, fit_intercept, tolerance, max_iterations, positive))]
+#[allow(clippy::too_many_arguments)]
+fn linear_coordinate_fit_validated<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    targets: PyReadonlyArray2<'py, f64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    alpha: f64,
+    l1_ratio: f64,
+    fit_intercept: bool,
+    tolerance: f64,
+    max_iterations: usize,
+    positive: bool,
+) -> PyResult<CoordinateFitOutput<'py>> {
+    let shape = input.shape();
+    let target_shape = targets.shape();
+    if shape[0] != target_shape[0] {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let input = input.as_slice()?;
+    let targets = targets.as_slice()?;
+    let weights = weights.as_slice()?;
+    let fit = py.detach(|| {
+        linear_model::fit_coordinate_descent_validated(
+            input,
+            shape[0],
+            shape[1],
+            targets,
+            target_shape[1],
+            weights,
+            alpha,
+            l1_ratio,
+            fit_intercept,
+            tolerance,
+            max_iterations,
+            positive,
+        )
+    })?;
+    Ok((
+        array2_output(py, fit.coefficients, target_shape[1], shape[1])?,
+        fit.intercepts.into_pyarray(py),
+        fit.iterations,
+        fit.dual_gaps.into_pyarray(py),
+        fit.converged,
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, labels, weights, classes, inverse_c, fit_intercept, tolerance, max_iterations))]
+#[allow(clippy::too_many_arguments)]
+fn logistic_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    labels: PyReadonlyArray1<'py, i64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    classes: usize,
+    inverse_c: f64,
+    fit_intercept: bool,
+    tolerance: f64,
+    max_iterations: usize,
+) -> PyResult<LogisticFitOutput<'py>> {
+    let shape = input.shape();
+    let input = input.as_slice()?;
+    let labels = labels.as_slice()?;
+    let weights = weights.as_slice()?;
+    let fit = py.detach(|| {
+        linear_model::fit_logistic(
+            input,
+            shape[0],
+            shape[1],
+            labels,
+            classes,
+            weights,
+            inverse_c,
+            fit_intercept,
+            tolerance,
+            max_iterations,
+        )
+    })?;
+    Ok((
+        array2_output(py, fit.coefficients, classes, shape[1])?,
+        fit.intercepts.into_pyarray(py),
+        fit.iterations,
+        fit.converged,
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, labels, weights, l1_regularization, l2_regularization, fit_intercept, tolerance, max_iterations))]
+#[allow(clippy::too_many_arguments)]
+fn logistic_fit_proximal<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    labels: PyReadonlyArray1<'py, i64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    l1_regularization: f64,
+    l2_regularization: f64,
+    fit_intercept: bool,
+    tolerance: f64,
+    max_iterations: usize,
+) -> PyResult<LogisticFitOutput<'py>> {
+    let shape = input.shape();
+    let input = input.as_slice()?;
+    let labels = labels.as_slice()?;
+    let weights = weights.as_slice()?;
+    let fit = py.detach(|| {
+        linear_model::fit_binary_logistic_proximal(
+            input,
+            shape[0],
+            shape[1],
+            labels,
+            weights,
+            l1_regularization,
+            l2_regularization,
+            fit_intercept,
+            tolerance,
+            max_iterations,
+        )
+    })?;
+    Ok((
+        array2_output(py, fit.coefficients, 2, shape[1])?,
+        fit.intercepts.into_pyarray(py),
+        fit.iterations,
+        fit.converged,
+    ))
+}
+
+#[pyfunction]
+fn logistic_softmax<'py>(
+    py: Python<'py>,
+    scores: PyReadonlyArray2<'py, f64>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = scores.shape();
+    let scores = scores.as_slice()?;
+    let output = py.detach(|| linear_model::softmax(scores, shape[0], shape[1]))?;
+    array2_output(py, output, shape[0], shape[1])
 }
 
 #[pyfunction]
@@ -976,6 +1247,15 @@ fn label_inverse_strings(
 
 #[pymodule]
 fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(build_profile, module)?)?;
+    module.add_function(wrap_pyfunction!(linear_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(linear_predict, module)?)?;
+    module.add_function(wrap_pyfunction!(linear_all_finite, module)?)?;
+    module.add_function(wrap_pyfunction!(linear_coordinate_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(linear_coordinate_fit_validated, module)?)?;
+    module.add_function(wrap_pyfunction!(logistic_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(logistic_fit_proximal, module)?)?;
+    module.add_function(wrap_pyfunction!(logistic_softmax, module)?)?;
     module.add_function(wrap_pyfunction!(metric_accuracy, module)?)?;
     module.add_function(wrap_pyfunction!(metric_confusion_matrix, module)?)?;
     module.add_function(wrap_pyfunction!(metric_confusion_i64, module)?)?;

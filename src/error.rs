@@ -32,6 +32,10 @@ pub enum CoreError {
     InvalidMetricCode,
     #[error("invalid compressed sparse matrix structure")]
     InvalidSparseStructure,
+    #[error("linear solver failed to produce a finite solution")]
+    LinearSolverFailed,
+    #[error("optimization did not receive at least two classes")]
+    InsufficientClasses,
     #[error("sparse index {0} is outside dimension {1}")]
     SparseIndexOutOfBounds(usize, usize),
 }

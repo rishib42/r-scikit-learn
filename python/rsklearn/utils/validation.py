@@ -10,6 +10,14 @@ from numpy.typing import NDArray
 _NO_VALIDATION = "no_validation"
 
 
+try:
+    from sklearn.exceptions import NotFittedError
+except ImportError:
+
+    class NotFittedError(ValueError, AttributeError):
+        """Raised when an estimator method requires fitting first."""
+
+
 def _estimator_name(estimator: Any) -> str:
     if estimator is None:
         return ""
@@ -319,7 +327,7 @@ def check_is_fitted(
             "This {name} instance is not fitted yet. Call 'fit' with appropriate "
             "arguments before using this estimator."
         )
-        raise ValueError((msg or default).format(name=type(estimator).__name__))
+        raise NotFittedError((msg or default).format(name=type(estimator).__name__))
 
 
 def _feature_names(X: Any) -> NDArray[Any] | None:
@@ -401,4 +409,10 @@ def validate_data(
     return checked
 
 
-__all__ = ["check_array", "check_is_fitted", "check_X_y", "validate_data"]
+__all__ = [
+    "NotFittedError",
+    "check_array",
+    "check_is_fitted",
+    "check_X_y",
+    "validate_data",
+]

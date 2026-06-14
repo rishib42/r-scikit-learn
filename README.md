@@ -6,7 +6,7 @@ provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
 `LabelEncoder`, `OrdinalEncoder`, `OneHotEncoder`, `SimpleImputer`, composition
 utilities, and common classification and regression metrics.
 It also provides dataset splitting and cross-validation model-selection
-utilities.
+utilities and the first Rust-powered linear models.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -142,6 +142,17 @@ X_train, X_test, y_train, y_test = train_test_split(
 scores = cross_val_score(estimator, X, y, cv=5, scoring="accuracy")
 ```
 
+```python
+from rsklearn.linear_model import Lasso, LinearRegression, LogisticRegression, Ridge
+
+regressor = Ridge(alpha=1.0).fit(X_train, y_train)
+predictions = regressor.predict(X_test)
+sparse_regressor = Lasso(alpha=0.1).fit(X_train, y_train)
+
+classifier = LogisticRegression(max_iter=500).fit(X_train, class_labels)
+probabilities = classifier.predict_proba(X_test)
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -227,6 +238,22 @@ metric scoring, slices sample-aligned fit parameters, and can assign a numeric
 score to failed folds. Parallel cross-validation is explicitly rejected until
 implemented.
 
+`rsklearn.linear_model` provides dense `LinearRegression`, `Ridge`, `Lasso`,
+`ElasticNet`, and `LogisticRegression`. Fitting uses safe-Rust kernels, while
+dense prediction uses NumPy's optimized BLAS path to avoid an unnecessary
+boundary crossing.
+Least-squares estimators use SVD-based solvers and support sample weights,
+intercepts, rank-deficient input, and multi-output regression.
+`Lasso` and `ElasticNet` use a shared Rust cyclic coordinate-descent solver and
+support sample weights, positive coefficients, and multi-output regression.
+`LogisticRegression` supports binary and multiclass labels with L2 or no
+regularization, plus binary L1 and elastic-net fitting through a Rust proximal
+solver. It also supports sample and class weights, probabilities, decision
+scores, convergence reporting, pipelines, and cross-validation. Sparse input,
+multiclass L1/elastic-net logistic fitting, one-vs-rest fitting, warm starts,
+random coordinate selection, and parallel estimator orchestration are
+explicitly rejected until implemented.
+
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is
 `None` only when both options are disabled. `var_` and `scale_` are `None`
@@ -252,19 +279,26 @@ the following compatibility and operational work remains:
   containers across estimators.
 - Estimator-check compliance for future classifier and regressor types.
 - Broader `copy=False` support and native float32 Rust kernels for scalers.
+- Further multiclass logistic solver optimization and broader parallel-kernel
+  tuning.
 - Broader fuzz, property, memory-pressure, and long-running benchmark coverage.
 
 No performance claim is made. Run:
 
 ```bash
+maturin develop --release
 python benches/benchmark_preprocessing.py
 python benches/benchmark_preprocessing.py --include-largest
 python benches/benchmark_metrics.py
+python benches/benchmark_linear_models.py
 ```
 
 The benchmark warms up each operation and reports multiple repetitions for
 fit, transform, and end-to-end calls. Public `r-scikit-learn` timings include
 Python-side validation and any required contiguous float64 conversion.
+Performance benchmarks must use a release Rust extension. `maturin develop`
+without `--release` intentionally builds an unoptimized debug extension for
+development and can be tens of times slower.
 
 ## Development
 

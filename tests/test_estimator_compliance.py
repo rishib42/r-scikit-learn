@@ -2,6 +2,13 @@ import warnings
 
 import pytest
 from rsklearn.impute import SimpleImputer
+from rsklearn.linear_model import (
+    ElasticNet,
+    Lasso,
+    LinearRegression,
+    LogisticRegression,
+    Ridge,
+)
 from rsklearn.preprocessing import (
     MinMaxScaler,
     Normalizer,
@@ -24,6 +31,11 @@ sklearn_checks = pytest.importorskip("sklearn.utils.estimator_checks")
         RobustScaler(),
         OrdinalEncoder(),
         SimpleImputer(),
+        LinearRegression(),
+        Ridge(),
+        Lasso(),
+        ElasticNet(),
+        LogisticRegression(max_iter=500),
     ],
 )
 def test_scaler_passes_scikit_learn_estimator_checks(estimator):
