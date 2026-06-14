@@ -9,7 +9,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from rsklearn import _core
-from rsklearn._validation import validate_numeric_2d, validate_numeric_2d_with_dtype
+from rsklearn._validation import (
+    one_to_one_feature_names,
+    validate_numeric_2d,
+    validate_numeric_2d_with_dtype,
+)
 from rsklearn.base import BaseEstimator, TransformerMixin
 from rsklearn.utils.validation import check_is_fitted
 
@@ -110,3 +114,7 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
             array, self.scale_, self.min_, low, high, False, inverse=True
         )
         return output.astype(output_dtype, copy=False)
+
+    def get_feature_names_out(self, input_features: Any = None) -> NDArray[Any]:
+        """Return unchanged output feature names."""
+        return one_to_one_feature_names(self, input_features)

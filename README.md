@@ -98,6 +98,14 @@ imputer = SimpleImputer(strategy="median", add_indicator=True)
 X_imputed = imputer.fit_transform([[1.0, np.nan], [3.0, 4.0]])
 ```
 
+```python
+from rsklearn.pipeline import make_pipeline
+from rsklearn.preprocessing import StandardScaler
+
+pipeline = make_pipeline(SimpleImputer(), StandardScaler())
+X_prepared = pipeline.fit_transform([[1.0, np.nan], [3.0, 4.0]])
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -151,6 +159,13 @@ replacement use native Rust kernels. Numeric mean fitting uses a fused
 row-major pass that returns compact missing and empty-feature metadata without
 building a full Python missing mask. Sparse input is rejected until a native
 sparse imputation path is implemented.
+
+`Pipeline` and `make_pipeline` provide sequential estimator composition,
+nested parameter management, routed `step__parameter` fit arguments,
+passthrough steps, prediction and scoring delegation, inverse transforms, and
+feature-name propagation. Estimator computations remain in their existing Rust
+kernels. Pipeline caching and metadata routing are explicitly rejected until
+implemented.
 
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is

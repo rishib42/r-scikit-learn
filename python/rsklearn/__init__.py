@@ -8,6 +8,7 @@ from .base import (
     clone,
 )
 from .impute import SimpleImputer
+from .pipeline import Pipeline, make_pipeline
 from .preprocessing import (
     LabelEncoder,
     MinMaxScaler,
@@ -26,11 +27,13 @@ __all__ = [
     "Normalizer",
     "OneHotEncoder",
     "OrdinalEncoder",
+    "Pipeline",
     "RegressorMixin",
     "RobustScaler",
     "SimpleImputer",
     "StandardScaler",
     "TransformerMixin",
     "clone",
+    "make_pipeline",
 ]
 __version__ = "0.1.0"

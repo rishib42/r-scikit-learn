@@ -8,7 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from rsklearn import _core
-from rsklearn._validation import validate_normalizer_2d
+from rsklearn._validation import one_to_one_feature_names, validate_normalizer_2d
 from rsklearn.base import BaseEstimator, TransformerMixin
 from rsklearn.utils.validation import check_is_fitted
 
@@ -71,3 +71,7 @@ class Normalizer(TransformerMixin, BaseEstimator):
         self._validate_params()
         array = validate_normalizer_2d(X, estimator=self, reset=True, copy=False)
         return self._transform_validated(array)
+
+    def get_feature_names_out(self, input_features: Any = None) -> NDArray[Any]:
+        """Return unchanged output feature names."""
+        return one_to_one_feature_names(self, input_features)

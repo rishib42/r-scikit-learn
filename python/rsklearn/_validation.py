@@ -10,6 +10,31 @@ from numpy.typing import NDArray
 from rsklearn.utils.validation import check_array, validate_data
 
 
+def one_to_one_feature_names(
+    estimator: Any, input_features: Any = None
+) -> NDArray[Any]:
+    """Return validated feature names for a one-to-one transformer."""
+    from rsklearn.utils.validation import check_is_fitted
+
+    check_is_fitted(estimator, "n_features_in_")
+    if input_features is None:
+        if hasattr(estimator, "feature_names_in_"):
+            return estimator.feature_names_in_.copy()
+        return np.asarray(
+            [f"x{index}" for index in range(estimator.n_features_in_)], dtype=object
+        )
+    names = np.asarray(input_features, dtype=object)
+    if names.ndim != 1 or names.size != estimator.n_features_in_:
+        raise ValueError(
+            f"input_features must contain {estimator.n_features_in_} feature names"
+        )
+    if hasattr(estimator, "feature_names_in_") and not np.array_equal(
+        names, estimator.feature_names_in_
+    ):
+        raise ValueError("input_features must match feature_names_in_")
+    return names
+
+
 def validate_numeric_2d_with_dtype(
     X: Any, *, estimator: Any, reset: bool | None = None
 ) -> tuple[NDArray[np.float64], np.dtype[Any]]:
