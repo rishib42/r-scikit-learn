@@ -106,6 +106,23 @@ pipeline = make_pipeline(SimpleImputer(), StandardScaler())
 X_prepared = pipeline.fit_transform([[1.0, np.nan], [3.0, 4.0]])
 ```
 
+```python
+from rsklearn.compose import ColumnTransformer
+from rsklearn.impute import SimpleImputer
+from rsklearn.pipeline import make_pipeline
+from rsklearn.preprocessing import OneHotEncoder
+from rsklearn.preprocessing import StandardScaler
+
+preprocessor = ColumnTransformer(
+    [
+        ("numeric", make_pipeline(SimpleImputer(), StandardScaler()), ["age"]),
+        ("categorical", OneHotEncoder(handle_unknown="ignore"), ["city"]),
+    ],
+    remainder="drop",
+)
+X_prepared = preprocessor.fit_transform(table)
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -166,6 +183,13 @@ passthrough steps, prediction and scoring delegation, inverse transforms, and
 feature-name propagation. Estimator computations remain in their existing Rust
 kernels. Pipeline caching and metadata routing are explicitly rejected until
 implemented.
+
+`ColumnTransformer` and `make_column_transformer` apply independent
+transformers to integer-, boolean-, slice-, callable-, or name-selected
+columns. They support estimator cloning, passthrough and dropped columns,
+remainder estimators, nested parameters, transformer weights, feature-name
+propagation, and density-based dense or CSR output. Parallel execution through
+`n_jobs` is explicitly rejected until implemented.
 
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is

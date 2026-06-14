@@ -7,6 +7,7 @@ from .base import (
     TransformerMixin,
     clone,
 )
+from .compose import ColumnTransformer, make_column_transformer
 from .impute import SimpleImputer
 from .pipeline import Pipeline, make_pipeline
 from .preprocessing import (
@@ -22,6 +23,7 @@ from .preprocessing import (
 __all__ = [
     "BaseEstimator",
     "ClassifierMixin",
+    "ColumnTransformer",
     "LabelEncoder",
     "MinMaxScaler",
     "Normalizer",
@@ -34,6 +36,7 @@ __all__ = [
     "StandardScaler",
     "TransformerMixin",
     "clone",
+    "make_column_transformer",
     "make_pipeline",
 ]
 __version__ = "0.1.0"
