@@ -5,6 +5,8 @@ computational core and lightweight Python estimator classes. Version 0.1.0
 provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
 `LabelEncoder`, `OrdinalEncoder`, `OneHotEncoder`, `SimpleImputer`, composition
 utilities, and common classification and regression metrics.
+It also provides dataset splitting and cross-validation model-selection
+utilities.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -131,6 +133,15 @@ accuracy = accuracy_score(y_true, y_pred)
 mse = mean_squared_error(y_true_regression, y_pred_regression)
 ```
 
+```python
+from rsklearn.model_selection import cross_val_score, train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+scores = cross_val_score(estimator, X, y, cv=5, scoring="accuracy")
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -205,6 +216,16 @@ propagation, and density-based dense or CSR output. Parallel execution through
 matrices, and multi-output regression reductions execute in safe Rust while
 Python handles label semantics, binary and multiclass averaging, and
 validation.
+
+`rsklearn.model_selection` provides `train_test_split`, `KFold`,
+`StratifiedKFold`, and `cross_val_score`. Splits preserve common Python,
+NumPy, SciPy sparse, and pandas-like input containers. Seeded shuffling is
+deterministic and compatible with scikit-learn's `RandomState` behavior.
+`cross_val_score` clones estimators for every fold, selects stratified folds
+for classifiers by default, supports estimator, callable, and common named
+metric scoring, slices sample-aligned fit parameters, and can assign a numeric
+score to failed folds. Parallel cross-validation is explicitly rejected until
+implemented.
 
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is
