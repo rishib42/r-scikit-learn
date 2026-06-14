@@ -3,7 +3,8 @@
 `r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
 computational core and lightweight Python estimator classes. Version 0.1.0
 provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
-`LabelEncoder`, `OrdinalEncoder`, `OneHotEncoder`, and `SimpleImputer`.
+`LabelEncoder`, `OrdinalEncoder`, `OneHotEncoder`, `SimpleImputer`, composition
+utilities, and common classification and regression metrics.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -123,6 +124,13 @@ preprocessor = ColumnTransformer(
 X_prepared = preprocessor.fit_transform(table)
 ```
 
+```python
+from rsklearn.metrics import accuracy_score, mean_squared_error
+
+accuracy = accuracy_score(y_true, y_pred)
+mse = mean_squared_error(y_true_regression, y_pred_regression)
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -191,6 +199,13 @@ remainder estimators, nested parameters, transformer weights, feature-name
 propagation, and density-based dense or CSR output. Parallel execution through
 `n_jobs` is explicitly rejected until implemented.
 
+`rsklearn.metrics` provides `accuracy_score`, `confusion_matrix`,
+`precision_score`, `recall_score`, `f1_score`, `mean_squared_error`,
+`mean_absolute_error`, and `r2_score`. Large-array accuracy, weighted confusion
+matrices, and multi-output regression reductions execute in safe Rust while
+Python handles label semantics, binary and multiclass averaging, and
+validation.
+
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is
 `None` only when both options are disabled. `var_` and `scale_` are `None`
@@ -223,6 +238,7 @@ No performance claim is made. Run:
 ```bash
 python benches/benchmark_preprocessing.py
 python benches/benchmark_preprocessing.py --include-largest
+python benches/benchmark_metrics.py
 ```
 
 The benchmark warms up each operation and reports multiple repetitions for

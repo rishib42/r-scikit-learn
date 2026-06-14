@@ -3,6 +3,7 @@
 mod categorical;
 mod error;
 mod label_encoder;
+mod metrics;
 mod minmax_scaler;
 mod normalizer;
 mod robust_scaler;
@@ -31,6 +32,13 @@ type StandardFitOutput<'py> = (
 type ThreeFloatArrays<'py> = (FloatArray1<'py>, FloatArray1<'py>, FloatArray1<'py>);
 type FloatCategoryOutput<'py> = (FloatArray1<'py>, IntArray1<'py>);
 type CategoryMatrixOutput<'py, T> = (Vec<Vec<T>>, Bound<'py, PyArray2<i64>>);
+type RegressionReductionOutput<'py> = (
+    FloatArray1<'py>,
+    FloatArray1<'py>,
+    FloatArray1<'py>,
+    FloatArray1<'py>,
+    f64,
+);
 
 fn array2_output<'py>(
     py: Python<'py>,
@@ -63,6 +71,119 @@ fn array2_output_i64<'py>(
     let array = Array2::from_shape_vec((rows, cols), values)
         .map_err(|_| error::CoreError::ShapeMismatch)?;
     Ok(array.into_pyarray(py))
+}
+
+#[pyfunction]
+fn metric_accuracy(
+    py: Python<'_>,
+    expected: PyReadonlyArray1<'_, i64>,
+    predicted: PyReadonlyArray1<'_, i64>,
+    weights: PyReadonlyArray1<'_, f64>,
+) -> PyResult<(f64, f64)> {
+    let expected = expected.as_slice()?;
+    let predicted = predicted.as_slice()?;
+    let weights = weights.as_slice()?;
+    py.detach(|| metrics::accuracy(expected, predicted, weights))
+        .map_err(Into::into)
+}
+
+#[pyfunction]
+fn metric_confusion_matrix<'py>(
+    py: Python<'py>,
+    expected: PyReadonlyArray1<'py, i64>,
+    predicted: PyReadonlyArray1<'py, i64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    classes: usize,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let expected = expected.as_slice()?;
+    let predicted = predicted.as_slice()?;
+    let weights = weights.as_slice()?;
+    let output = py.detach(|| metrics::confusion_matrix(expected, predicted, weights, classes))?;
+    array2_output(py, output, classes, classes)
+}
+
+#[pyfunction]
+fn metric_confusion_i64<'py>(
+    py: Python<'py>,
+    expected: PyReadonlyArray1<'py, i64>,
+    predicted: PyReadonlyArray1<'py, i64>,
+    weights: PyReadonlyArray1<'py, f64>,
+) -> PyResult<(IntArray1<'py>, Bound<'py, PyArray2<f64>>)> {
+    let expected = expected.as_slice()?;
+    let predicted = predicted.as_slice()?;
+    let weights = weights.as_slice()?;
+    let (classes, output) = py.detach(|| metrics::confusion_i64(expected, predicted, weights))?;
+    let size = classes.len();
+    Ok((
+        classes.into_pyarray(py),
+        array2_output(py, output, size, size)?,
+    ))
+}
+
+#[pyfunction]
+fn metric_regression_reductions<'py>(
+    py: Python<'py>,
+    expected: PyReadonlyArray2<'py, f64>,
+    predicted: PyReadonlyArray2<'py, f64>,
+    weights: PyReadonlyArray1<'py, f64>,
+) -> PyResult<RegressionReductionOutput<'py>> {
+    let shape = expected.shape();
+    if predicted.shape() != shape {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let expected = expected.as_slice()?;
+    let predicted = predicted.as_slice()?;
+    let weights = weights.as_slice()?;
+    let output = py.detach(|| {
+        metrics::regression_reductions(expected, predicted, weights, shape[0], shape[1])
+    })?;
+    Ok((
+        output.absolute_error.into_pyarray(py),
+        output.squared_error.into_pyarray(py),
+        output.true_sum.into_pyarray(py),
+        output.true_squared_sum.into_pyarray(py),
+        output.weight_sum,
+    ))
+}
+
+#[pyfunction]
+fn metric_regression_error<'py>(
+    py: Python<'py>,
+    expected: PyReadonlyArray2<'py, f64>,
+    predicted: PyReadonlyArray2<'py, f64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    squared: bool,
+) -> PyResult<(FloatArray1<'py>, f64)> {
+    let shape = expected.shape();
+    if predicted.shape() != shape {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let expected = expected.as_slice()?;
+    let predicted = predicted.as_slice()?;
+    let weights = weights.as_slice()?;
+    let (output, weight_sum) = py.detach(|| {
+        metrics::regression_error(expected, predicted, weights, shape[0], shape[1], squared)
+    })?;
+    Ok((output.into_pyarray(py), weight_sum))
+}
+
+#[pyfunction]
+fn metric_regression_error_unweighted<'py>(
+    py: Python<'py>,
+    expected: PyReadonlyArray2<'py, f64>,
+    predicted: PyReadonlyArray2<'py, f64>,
+    squared: bool,
+) -> PyResult<FloatArray1<'py>> {
+    let shape = expected.shape();
+    if predicted.shape() != shape {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let expected = expected.as_slice()?;
+    let predicted = predicted.as_slice()?;
+    let output = py.detach(|| {
+        metrics::regression_error_unweighted(expected, predicted, shape[0], shape[1], squared)
+    })?;
+    Ok(output.into_pyarray(py))
 }
 
 #[pyfunction]
@@ -855,6 +976,15 @@ fn label_inverse_strings(
 
 #[pymodule]
 fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(metric_accuracy, module)?)?;
+    module.add_function(wrap_pyfunction!(metric_confusion_matrix, module)?)?;
+    module.add_function(wrap_pyfunction!(metric_confusion_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(metric_regression_reductions, module)?)?;
+    module.add_function(wrap_pyfunction!(metric_regression_error, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        metric_regression_error_unweighted,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(sparse_validate_i32, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_validate_i64, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_scale_csr_i32_f64, module)?)?;

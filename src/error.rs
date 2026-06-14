@@ -24,6 +24,12 @@ pub enum CoreError {
     InputContainsInfinity,
     #[error("input contains NaN, but the configured missing value is not NaN")]
     UnexpectedNaN,
+    #[error("input contains NaN or infinity")]
+    InputContainsNonFinite,
+    #[error("sample weights must be finite, non-negative, and match the sample count")]
+    InvalidSampleWeight,
+    #[error("encoded metric label is outside the valid range")]
+    InvalidMetricCode,
     #[error("invalid compressed sparse matrix structure")]
     InvalidSparseStructure,
     #[error("sparse index {0} is outside dimension {1}")]
