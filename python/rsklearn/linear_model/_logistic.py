@@ -123,7 +123,9 @@ class LogisticRegression(ClassifierMixin, BaseEstimator):
     def _class_weights(
         self, labels: NDArray[np.int64], sample_weight: Any
     ) -> NDArray[np.float64]:
-        weights = validate_sample_weight(sample_weight, labels.size)
+        weights = validate_sample_weight(
+            sample_weight, labels.size, zero_total_error=ValueError
+        )
         if self.class_weight is None:
             return weights
         if self.class_weight == "balanced":

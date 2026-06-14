@@ -175,8 +175,16 @@ def test_real_mixed_pipeline_with_named_dataframe():
         ]
     )
     output = transformer.fit_transform(X)
-    assert sparse.issparse(output)
+    assert isinstance(output, np.ndarray)
     assert output.shape == (3, 3)
+    np.testing.assert_allclose(
+        output,
+        [
+            [-1.224744871391589, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.224744871391589, 1.0, 0.0],
+        ],
+    )
     np.testing.assert_array_equal(
         transformer.get_feature_names_out(),
         ["numeric__age", "categorical__city_a", "categorical__city_b"],

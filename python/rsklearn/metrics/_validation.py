@@ -13,7 +13,11 @@ class UndefinedMetricWarning(UserWarning):
 
 
 def validate_sample_weight(
-    sample_weight: Any, samples: int, *, allow_zero_total: bool = False
+    sample_weight: Any,
+    samples: int,
+    *,
+    allow_zero_total: bool = False,
+    zero_total_error: type[Exception] = ZeroDivisionError,
 ) -> NDArray[np.float64]:
     if sample_weight is None:
         weights = np.ones(samples, dtype=np.float64)
@@ -25,7 +29,7 @@ def validate_sample_weight(
             raise ValueError("sample_weight must contain finite non-negative values")
         weights = np.ascontiguousarray(weights)
     if not allow_zero_total and float(np.sum(weights)) == 0:
-        raise ZeroDivisionError("Weights sum to zero, cannot be normalized")
+        raise zero_total_error("sample_weight contains only zero values")
     return weights
 
 

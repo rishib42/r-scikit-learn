@@ -39,6 +39,15 @@ def test_linear_regression_supports_weights_rank_deficiency_and_no_intercept():
     np.testing.assert_allclose(no_intercept.coef_, [2])
 
 
+@pytest.mark.parametrize(
+    "estimator",
+    [LinearRegression(), Ridge(), Lasso(), ElasticNet(), LogisticRegression()],
+)
+def test_linear_models_reject_all_zero_sample_weights(estimator):
+    with pytest.raises(ValueError, match="sample_weight.*zero"):
+        estimator.fit([[0.0], [1.0]], [0.0, 1.0], sample_weight=[0.0, 0.0])
+
+
 def test_ridge_regularizes_coefficients_and_supports_multioutput():
     X = np.asarray([[1.0, 2.0], [2.0, 0.0], [3.0, 1.0], [4.0, 3.0]])
     y = 1.0 + X @ np.asarray([2.0, 1.5])

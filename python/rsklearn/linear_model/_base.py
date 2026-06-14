@@ -43,7 +43,9 @@ def validate_regression_fit(
     single_output = original_y.ndim == 1
     if y_array.ndim == 1:
         y_array = y_array[:, None]
-    weights = validate_sample_weight(sample_weight, X_array.shape[0])
+    weights = validate_sample_weight(
+        sample_weight, X_array.shape[0], zero_total_error=ValueError
+    )
     return (
         np.ascontiguousarray(X_array, dtype=np.float64),
         np.ascontiguousarray(y_array, dtype=np.float64),
