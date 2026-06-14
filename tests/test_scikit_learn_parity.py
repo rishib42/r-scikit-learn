@@ -149,7 +149,11 @@ def test_simple_imputer_numeric_parity(options):
         X[:, 2] = 5.0
     ours = SimpleImputer(**options).fit(X)
     theirs = ScikitSimpleImputer(**options).fit(X)
-    np.testing.assert_allclose(ours.statistics_, theirs.statistics_, equal_nan=True)
+    np.testing.assert_allclose(
+        np.asarray(ours.statistics_, dtype=np.float64),
+        np.asarray(theirs.statistics_, dtype=np.float64),
+        equal_nan=True,
+    )
     np.testing.assert_allclose(ours.transform(X), theirs.transform(X), equal_nan=True)
 
 
