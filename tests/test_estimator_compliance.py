@@ -1,6 +1,7 @@
 import warnings
 
 import pytest
+from rsklearn.impute import SimpleImputer
 from rsklearn.preprocessing import (
     MinMaxScaler,
     Normalizer,
@@ -22,6 +23,7 @@ sklearn_checks = pytest.importorskip("sklearn.utils.estimator_checks")
         OneHotEncoder(),
         RobustScaler(),
         OrdinalEncoder(),
+        SimpleImputer(),
     ],
 )
 def test_scaler_passes_scikit_learn_estimator_checks(estimator):

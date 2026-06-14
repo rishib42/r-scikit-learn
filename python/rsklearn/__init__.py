@@ -7,6 +7,7 @@ from .base import (
     TransformerMixin,
     clone,
 )
+from .impute import SimpleImputer
 from .preprocessing import (
     LabelEncoder,
     MinMaxScaler,
@@ -27,6 +28,7 @@ __all__ = [
     "OrdinalEncoder",
     "RegressorMixin",
     "RobustScaler",
+    "SimpleImputer",
     "StandardScaler",
     "TransformerMixin",
     "clone",

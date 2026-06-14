@@ -3,7 +3,7 @@
 `r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
 computational core and lightweight Python estimator classes. Version 0.1.0
 provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
-`LabelEncoder`, `OrdinalEncoder`, and `OneHotEncoder`.
+`LabelEncoder`, `OrdinalEncoder`, `OneHotEncoder`, and `SimpleImputer`.
 
 This project is not affiliated with or endorsed by scikit-learn.
 
@@ -90,6 +90,14 @@ encoder = OneHotEncoder(handle_unknown="ignore")
 X_one_hot = encoder.fit_transform([["small"], ["large"], ["small"]])
 ```
 
+```python
+import numpy as np
+from rsklearn.impute import SimpleImputer
+
+imputer = SimpleImputer(strategy="median", add_indicator=True)
+X_imputed = imputer.fit_transform([[1.0, np.nan], [3.0, 4.0]])
+```
+
 ## Supported Inputs
 
 Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
@@ -136,6 +144,13 @@ automatically discovered categories, unknown and missing-value encoding,
 infrequent-category grouping, inverse transforms, and output feature names.
 `OneHotEncoder` adds native Rust CSR construction, sparse or dense output,
 category dropping, unknown handling, inverse transforms, and feature names.
+`SimpleImputer` supports dense numeric and categorical input, standard and
+callable strategies, custom missing sentinels, empty-feature handling, missing
+indicators, inverse transforms, and feature names. Numeric statistics and
+replacement use native Rust kernels. Numeric mean fitting uses a fused
+row-major pass that returns compact missing and empty-feature metadata without
+building a full Python missing mask. Sparse input is rejected until a native
+sparse imputation path is implemented.
 
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is

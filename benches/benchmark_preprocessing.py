@@ -10,6 +10,7 @@ from collections.abc import Callable
 import numpy as np
 from rsklearn._validation import validate_numeric_2d
 from rsklearn.base import BaseEstimator
+from rsklearn.impute import SimpleImputer
 from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
@@ -22,6 +23,7 @@ from rsklearn.preprocessing import (
 from rsklearn.preprocessing._categorical import discover_categories, encode_categories
 from rsklearn.utils import check_array, scale_sparse_columns, sparse_components
 from scipy import sparse
+from sklearn.impute import SimpleImputer as ScikitSimpleImputer
 
 # The scikit-learn distribution intentionally exposes the `sklearn` import package.
 from sklearn.preprocessing import LabelEncoder as ScikitLabelEncoder
@@ -125,6 +127,48 @@ def benchmark_matrix(rows: int, columns: int, repetitions: int) -> None:
         "RobustScaler float32 transform",
         lambda: ours_robust_float32.transform(X_float32),
         lambda: theirs_robust_float32.transform(X_float32),
+        repetitions,
+    )
+    X_missing = X.copy()
+    X_missing[::10, ::3] = np.nan
+    ours_imputer = SimpleImputer().fit(X_missing)
+    theirs_imputer = ScikitSimpleImputer().fit(X_missing)
+    report_comparison(
+        "SimpleImputer mean fit_transform",
+        lambda: SimpleImputer().fit_transform(X_missing),
+        lambda: ScikitSimpleImputer().fit_transform(X_missing),
+        repetitions,
+    )
+    report_comparison(
+        "SimpleImputer mean transform",
+        lambda: ours_imputer.transform(X_missing),
+        lambda: theirs_imputer.transform(X_missing),
+        repetitions,
+    )
+    report_comparison(
+        "SimpleImputer mean fit",
+        lambda: SimpleImputer().fit(X_missing),
+        lambda: ScikitSimpleImputer().fit(X_missing),
+        repetitions,
+    )
+    ours_median_imputer = SimpleImputer(strategy="median").fit(X_missing)
+    theirs_median_imputer = ScikitSimpleImputer(strategy="median").fit(X_missing)
+    report_comparison(
+        "SimpleImputer median fit_transform",
+        lambda: SimpleImputer(strategy="median").fit_transform(X_missing),
+        lambda: ScikitSimpleImputer(strategy="median").fit_transform(X_missing),
+        repetitions,
+    )
+    report_comparison(
+        "SimpleImputer median transform",
+        lambda: ours_median_imputer.transform(X_missing),
+        lambda: theirs_median_imputer.transform(X_missing),
+        repetitions,
+    )
+    report_comparison(
+        "SimpleImputer median fit",
+        lambda: SimpleImputer(strategy="median").fit(X_missing),
+        lambda: ScikitSimpleImputer(strategy="median").fit(X_missing),
         repetitions,
     )
 

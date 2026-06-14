@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from rsklearn.impute import SimpleImputer
 from rsklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
@@ -19,6 +20,7 @@ ScikitOneHotEncoder = scikit_learn_preprocessing.OneHotEncoder
 ScikitOrdinalEncoder = scikit_learn_preprocessing.OrdinalEncoder
 ScikitRobustScaler = scikit_learn_preprocessing.RobustScaler
 ScikitStandardScaler = scikit_learn_preprocessing.StandardScaler
+ScikitSimpleImputer = pytest.importorskip("sklearn.impute").SimpleImputer
 
 
 @pytest.mark.parametrize(
@@ -126,6 +128,42 @@ def test_one_hot_encoder_parity(options):
     ours = ours.toarray() if hasattr(ours, "toarray") else ours
     theirs = theirs.toarray() if hasattr(theirs, "toarray") else theirs
     np.testing.assert_array_equal(ours, theirs)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"strategy": "median"},
+        {"strategy": "most_frequent"},
+        {"strategy": "constant", "fill_value": -4},
+        {"missing_values": -1},
+        {"keep_empty_features": True},
+        {"add_indicator": True},
+    ],
+)
+def test_simple_imputer_numeric_parity(options):
+    missing = options.get("missing_values", np.nan)
+    X = np.asarray([[1.0, missing, np.nan], [3.0, 4.0, np.nan]])
+    if not _is_nan_for_test(missing) or options.get("strategy") == "constant":
+        X[:, 2] = 5.0
+    ours = SimpleImputer(**options).fit(X)
+    theirs = ScikitSimpleImputer(**options).fit(X)
+    np.testing.assert_allclose(ours.statistics_, theirs.statistics_, equal_nan=True)
+    np.testing.assert_allclose(ours.transform(X), theirs.transform(X), equal_nan=True)
+
+
+def _is_nan_for_test(value):
+    return isinstance(value, (float, np.floating)) and np.isnan(value)
+
+
+def test_simple_imputer_categorical_parity():
+    X = np.asarray([["b", None], ["a", "x"], ["a", None]], dtype=object)
+    options = {"missing_values": None, "strategy": "most_frequent"}
+    ours = SimpleImputer(**options).fit(X)
+    theirs = ScikitSimpleImputer(**options).fit(X)
+    np.testing.assert_array_equal(ours.statistics_, theirs.statistics_)
+    np.testing.assert_array_equal(ours.transform(X), theirs.transform(X))
 
 
 def test_randomized_scaler_parity():

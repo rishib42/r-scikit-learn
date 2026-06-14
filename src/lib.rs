@@ -6,6 +6,7 @@ mod label_encoder;
 mod minmax_scaler;
 mod normalizer;
 mod robust_scaler;
+mod simple_imputer;
 mod sparse;
 mod standard_scaler;
 
@@ -419,6 +420,76 @@ fn robust_transform_f32<'py>(
 }
 
 #[pyfunction]
+fn simple_imputer_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    strategy: &str,
+    missing_value: f64,
+    missing_is_nan: bool,
+) -> PyResult<FloatArray1<'py>> {
+    let shape = input.shape();
+    let input = input.as_slice()?;
+    let strategy = simple_imputer::Strategy::try_from(strategy)?;
+    let statistics = py.detach(|| {
+        simple_imputer::fit(
+            input,
+            shape[0],
+            shape[1],
+            strategy,
+            missing_value,
+            missing_is_nan,
+        )
+    })?;
+    Ok(statistics.into_pyarray(py))
+}
+
+#[pyfunction]
+fn simple_imputer_mean_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    missing_value: f64,
+    missing_is_nan: bool,
+) -> PyResult<(FloatArray1<'py>, IntArray1<'py>, IntArray1<'py>)> {
+    let shape = input.shape();
+    let input = input.as_slice()?;
+    let stats = py.detach(|| {
+        simple_imputer::fit_mean(input, shape[0], shape[1], missing_value, missing_is_nan)
+    })?;
+    Ok((
+        stats.statistics.into_pyarray(py),
+        stats.missing_features.into_pyarray(py),
+        stats.empty_features.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+fn simple_imputer_transform<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    statistics: PyReadonlyArray1<'py, f64>,
+    retained: PyReadonlyArray1<'py, i64>,
+    missing_value: f64,
+    missing_is_nan: bool,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = input.shape();
+    let input = input.as_slice()?;
+    let statistics = statistics.as_slice()?;
+    let retained = retained.as_slice()?;
+    let output = py.detach(|| {
+        simple_imputer::transform(
+            input,
+            shape[0],
+            shape[1],
+            statistics,
+            retained,
+            missing_value,
+            missing_is_nan,
+        )
+    })?;
+    array2_output(py, output, shape[0], retained.len())
+}
+
+#[pyfunction]
 fn category_discover_f64<'py>(
     py: Python<'py>,
     values: PyReadonlyArray1<'py, f64>,
@@ -801,6 +872,9 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(robust_fit, module)?)?;
     module.add_function(wrap_pyfunction!(robust_transform_f64, module)?)?;
     module.add_function(wrap_pyfunction!(robust_transform_f32, module)?)?;
+    module.add_function(wrap_pyfunction!(simple_imputer_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(simple_imputer_mean_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(simple_imputer_transform, module)?)?;
     module.add_function(wrap_pyfunction!(category_discover_f64, module)?)?;
     module.add_function(wrap_pyfunction!(category_discover_matrix_f64, module)?)?;
     module.add_function(wrap_pyfunction!(category_encode_f64, module)?)?;

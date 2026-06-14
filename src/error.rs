@@ -18,6 +18,12 @@ pub enum CoreError {
     InvalidNorm(String),
     #[error("invalid quantile range: ({0}, {1})")]
     InvalidQuantileRange(f64, f64),
+    #[error("unsupported imputation strategy: {0}")]
+    InvalidImputationStrategy(String),
+    #[error("input contains infinity")]
+    InputContainsInfinity,
+    #[error("input contains NaN, but the configured missing value is not NaN")]
+    UnexpectedNaN,
     #[error("invalid compressed sparse matrix structure")]
     InvalidSparseStructure,
     #[error("sparse index {0} is outside dimension {1}")]
