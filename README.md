@@ -3,7 +3,7 @@
 Fast, familiar machine-learning building blocks powered by safe Rust. 🦀
 
 `r-scikit-learn` combines a Rust computational core with lightweight,
-scikit-learn-style Python estimators. Version 0.1.0 includes:
+scikit-learn-style Python estimators. Version 0.1.1 includes:
 
 - Preprocessing, categorical encoding, and missing-value imputation
 - Pipelines and column transformers

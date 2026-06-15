@@ -5,6 +5,8 @@ published package versions are immutable.
 
 ## Unreleased
 
+## 0.1.1 - 2026-06-15
+
 - Added wheel and source-distribution installation testing across supported
   operating systems and Python versions.
 - Added a numerical-safety fallback for ill-conditioned tall least-squares

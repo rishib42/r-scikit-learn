@@ -45,4 +45,4 @@ __all__ = [
     "make_column_transformer",
     "make_pipeline",
 ]
-__version__ = "0.1.0"
+__version__ = "0.1.1"
