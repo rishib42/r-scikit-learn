@@ -29,7 +29,7 @@ crate-type = ["cdylib", "rlib"]
 faer = { version = "0.24", default-features = false, features = ["std", "rayon", "linalg"] }
 nalgebra = { version = "0.34", default-features = false, features = ["std"] }
 numpy = "0.28"
-pyo3 = { version = "0.28", features = ["auto-initialize"] }
+pyo3 = "0.28"
 rayon = "1.11"
 rustc-hash = "2"
 thiserror = "2"
