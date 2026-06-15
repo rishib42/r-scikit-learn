@@ -9,6 +9,7 @@ repository = "https://github.com/rishib42/r-scikit-learn"
 include = [
   "/Cargo.lock",
   "/Cargo.toml",
+  "/CHANGELOG.md",
   "/LICENSE",
   "/README.md",
   "/benches/*.py",

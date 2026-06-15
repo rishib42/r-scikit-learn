@@ -296,14 +296,22 @@ Substantial numerical loops release the Python GIL.
 
 ## Release
 
-1. Run all development checks and build a release wheel.
-2. Install the wheel into a clean virtual environment and run the import smoke
-   test.
-3. Verify the distribution name on PyPI.
-4. Tag the release as `v0.1.0` and push the tag.
-5. Approve the GitHub Actions Trusted Publishing environment.
+1. Update the matching versions in `pyproject.toml`, `Cargo.toml`, and
+   `python/rsklearn/__init__.py`, then update `CHANGELOG.md`.
+2. Push the release commit and wait for CI, including manylinux and sdist
+   installation checks, to pass.
+3. Run the manual TestPyPI workflow and verify its distributions.
+4. Run the manual Release workflow with the version number without a `v`
+   prefix.
+5. Approve the PyPI environment if required.
 
-The release workflow uses PyPI Trusted Publishing and contains no API token.
+The release workflow refuses existing versions, installs every wheel on
+Python 3.10-3.13 across Linux, macOS, and Windows, verifies sdist installation,
+publishes through PyPI Trusted Publishing, creates the immutable GitHub tag and
+release, attaches artifacts, and verifies installation from PyPI. No API token
+is stored in the repository. Configure separate `pypi` and `testpypi` GitHub
+environments and matching Trusted Publishers for `release.yml` and
+`test-pypi.yml`, respectively.
 
 ## Roadmap
 

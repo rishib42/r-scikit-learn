@@ -12,6 +12,26 @@ from rsklearn.base import BaseEstimator, RegressorMixin
 
 from ._base import LinearModel, validate_regression_fit
 
+# Normal equations square the condition number. This cutoff limits the
+# resulting float64 error amplification before selecting the fast Gram path.
+_GRAM_MIN_SINGULAR_RATIO = np.finfo(np.float64).eps ** 0.25
+_GRAM_RANK_RESOLUTION = np.sqrt(np.finfo(np.float64).eps)
+
+
+def _tall_solution_is_stable(singular: np.ndarray, rank: int, tolerance: float) -> bool:
+    """Return whether normal-equation accuracy is reliable for this spectrum."""
+    if rank == 0 or singular.size == 0 or not np.isfinite(singular).all():
+        return False
+    if rank < singular.size and tolerance < _GRAM_RANK_RESOLUTION:
+        return False
+    largest = singular[0]
+    smallest_retained = singular[rank - 1]
+    return (
+        largest > 0
+        and smallest_retained > 0
+        and smallest_retained / largest >= _GRAM_MIN_SINGULAR_RATIO
+    )
+
 
 def _fit_lstsq(
     X: np.ndarray,
@@ -22,7 +42,9 @@ def _fit_lstsq(
 ) -> tuple[np.ndarray, np.ndarray, int, np.ndarray]:
     """Solve unregularized least squares through a shape-aware dense backend."""
     if X.shape[0] >= 4 * X.shape[1]:
-        return _core.linear_fit_tall(X, y, weights, fit_intercept, tolerance)
+        tall_fit = _core.linear_fit_tall(X, y, weights, fit_intercept, tolerance)
+        if _tall_solution_is_stable(tall_fit[3], tall_fit[2], tolerance):
+            return tall_fit
     uniform_weights = np.all(weights == weights[0])
     if fit_intercept:
         if uniform_weights:

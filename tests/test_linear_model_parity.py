@@ -1,12 +1,16 @@
 import numpy as np
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from rsklearn.linear_model import (
     ElasticNet,
     Lasso,
     LinearRegression,
     LogisticRegression,
     Ridge,
+    _least_squares,
 )
+from rsklearn.linear_model._least_squares import _tall_solution_is_stable
 from scipy import linalg
 
 sklearn_linear = pytest.importorskip("sklearn.linear_model")
@@ -58,6 +62,84 @@ def test_tall_linear_regression_matches_svd_near_rank_deficiency(perturbation):
     expected = X @ coefficients + y_mean - coefficients @ x_mean
     assert ours.rank_ == rank
     np.testing.assert_allclose(ours.predict(X), expected, rtol=1e-7, atol=5e-9)
+
+
+@given(
+    rows=st.integers(min_value=80, max_value=240),
+    columns=st.integers(min_value=2, max_value=12),
+    log_condition=st.floats(
+        min_value=0.0, max_value=12.0, allow_nan=False, allow_infinity=False
+    ),
+    weighted=st.booleans(),
+    fit_intercept=st.booleans(),
+)
+@settings(max_examples=40, deadline=None)
+def test_linear_regression_matches_svd_across_condition_numbers(
+    rows, columns, log_condition, weighted, fit_intercept
+):
+    rows = max(rows, 4 * columns)
+    rng = np.random.default_rng(
+        rows * 10_000 + columns * 100 + int(log_condition * 10) + int(weighted)
+    )
+    left, _ = np.linalg.qr(rng.normal(size=(rows, columns)))
+    right, _ = np.linalg.qr(rng.normal(size=(columns, columns)))
+    singular = np.geomspace(1.0, 10.0**-log_condition, columns)
+    X = np.ascontiguousarray((left * singular) @ right.T)
+    y = rng.normal(size=rows)
+    weights = rng.uniform(0.1, 2.0, size=rows) if weighted else None
+    ours = LinearRegression(tol=1e-10, fit_intercept=fit_intercept).fit(
+        X, y, sample_weight=weights
+    )
+    reference_weights = np.ones(rows) if weights is None else weights
+    if fit_intercept:
+        x_mean = np.average(X, axis=0, weights=reference_weights)
+        y_mean = np.average(y, weights=reference_weights)
+    else:
+        x_mean = np.zeros(columns)
+        y_mean = 0.0
+    root_weights = np.sqrt(reference_weights)
+    coefficients, _, _, _ = linalg.lstsq(
+        (X - x_mean) * root_weights[:, None],
+        (y - y_mean) * root_weights,
+        cond=1e-10,
+        check_finite=False,
+        lapack_driver="gelsd",
+    )
+    expected = X @ coefficients + y_mean - coefficients @ x_mean
+    np.testing.assert_allclose(ours.predict(X), expected, rtol=1e-7, atol=1e-9)
+
+
+def test_tall_solution_stability_gate_rejects_unsafe_spectra():
+    assert _tall_solution_is_stable(np.asarray([10.0, 1.0]), 2, 1e-6)
+    assert not _tall_solution_is_stable(np.asarray([10.0, 1e-10]), 2, 1e-6)
+    assert _tall_solution_is_stable(np.asarray([10.0, 1.0, 0.0]), 2, 1e-6)
+    assert not _tall_solution_is_stable(np.asarray([10.0, 1.0, 0.0]), 2, 1e-10)
+    assert not _tall_solution_is_stable(np.asarray([0.0, 0.0]), 0, 1e-6)
+
+
+@pytest.mark.parametrize(
+    "log_condition, expects_fallback", [(2.0, False), (10.0, True)]
+)
+def test_tall_linear_regression_falls_back_only_when_numerically_unsafe(
+    monkeypatch, log_condition, expects_fallback
+):
+    rng = np.random.default_rng(1234)
+    left, _ = np.linalg.qr(rng.normal(size=(1_000, 5)))
+    right, _ = np.linalg.qr(rng.normal(size=(5, 5)))
+    X = np.ascontiguousarray(
+        (left * np.geomspace(1.0, 10.0**-log_condition, 5)) @ right.T
+    )
+    original = _least_squares.linalg.lstsq
+    calls = 0
+
+    def tracked_lstsq(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_least_squares.linalg, "lstsq", tracked_lstsq)
+    LinearRegression(tol=1e-10).fit(X, rng.normal(size=X.shape[0]))
+    assert bool(calls) is expects_fallback
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 10.0])

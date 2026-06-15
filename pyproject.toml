@@ -26,6 +26,7 @@ dependencies = ["numpy>=1.23", "scipy>=1.10"]
 
 [project.optional-dependencies]
 dev = [
+  "hypothesis>=6.100,<7",
   "maturin>=1.9,<2.0",
   "pytest>=8",
   "ruff>=0.11",
@@ -36,6 +37,7 @@ dev = [
 Homepage = "https://github.com/rishib42/r-scikit-learn"
 Repository = "https://github.com/rishib42/r-scikit-learn"
 Issues = "https://github.com/rishib42/r-scikit-learn/issues"
+Changelog = "https://github.com/rishib42/r-scikit-learn/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 python-source = "python"
