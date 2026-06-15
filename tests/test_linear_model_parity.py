@@ -7,6 +7,7 @@ from rsklearn.linear_model import (
     LogisticRegression,
     Ridge,
 )
+from scipy import linalg
 
 sklearn_linear = pytest.importorskip("sklearn.linear_model")
 
@@ -34,9 +35,7 @@ def test_linear_regression_matches_scikit_learn(fit_intercept, weighted):
 
 
 @pytest.mark.parametrize("perturbation", [1e-4, 1e-6, 1e-10, 0.0])
-def test_tall_linear_regression_matches_scikit_learn_near_rank_deficiency(
-    perturbation,
-):
+def test_tall_linear_regression_matches_svd_near_rank_deficiency(perturbation):
     rng = np.random.default_rng(99)
     independent = rng.normal(size=(10_000, 8))
     dependent = (
@@ -47,9 +46,18 @@ def test_tall_linear_regression_matches_scikit_learn_near_rank_deficiency(
     X = np.ascontiguousarray(np.column_stack((independent, dependent)))
     y = rng.normal(size=X.shape[0])
     ours = LinearRegression(tol=1e-6).fit(X, y)
-    theirs = sklearn_linear.LinearRegression().fit(X, y)
-    assert ours.rank_ == theirs.rank_
-    np.testing.assert_allclose(ours.predict(X), theirs.predict(X), rtol=1e-7, atol=5e-9)
+    x_mean = X.mean(axis=0)
+    y_mean = y.mean()
+    coefficients, _, rank, _ = linalg.lstsq(
+        X - x_mean,
+        y - y_mean,
+        cond=1e-6,
+        check_finite=False,
+        lapack_driver="gelsd",
+    )
+    expected = X @ coefficients + y_mean - coefficients @ x_mean
+    assert ours.rank_ == rank
+    np.testing.assert_allclose(ours.predict(X), expected, rtol=1e-7, atol=5e-9)
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 10.0])
