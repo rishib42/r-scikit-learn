@@ -10,6 +10,8 @@ from collections.abc import Callable
 
 import numpy as np
 import rsklearn.linear_model as rlinear
+import scipy
+import sklearn
 import sklearn.linear_model as slinear
 from rsklearn import _core
 
@@ -65,6 +67,10 @@ def main() -> None:
         )
     print(f"Python: {sys.executable}")
     print(f"Rust extension: {_core.__file__} ({profile})")
+    print(
+        f"Dependencies: numpy {np.__version__}, scipy {scipy.__version__}, "
+        f"scikit-learn {sklearn.__version__}"
+    )
     rng = np.random.default_rng(20260614)
     X = rng.normal(size=(args.samples, args.features))
     coefficients = rng.normal(size=args.features)
