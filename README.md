@@ -1,30 +1,30 @@
 # r-scikit-learn
 
-`r-scikit-learn` provides scikit-learn-style preprocessing with a safe Rust
-computational core and lightweight Python estimator classes. Version 0.1.0
-provides `StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, and
-`LabelEncoder`, `OrdinalEncoder`, `OneHotEncoder`, `SimpleImputer`, composition
-utilities, and common classification and regression metrics.
-It also provides dataset splitting and cross-validation model-selection
-utilities and the first Rust-powered linear models.
+Fast, familiar machine-learning building blocks powered by safe Rust. 🦀
+
+`r-scikit-learn` combines a Rust computational core with lightweight,
+scikit-learn-style Python estimators. Version 0.1.0 includes:
+
+- Preprocessing, categorical encoding, and missing-value imputation
+- Pipelines and column transformers
+- Classification and regression metrics
+- Dataset splitting and cross-validation
+- Rust-powered linear models
 
 This project is not affiliated with or endorsed by scikit-learn.
 
 The installable distribution is named `r-scikit-learn`. Its Python import
 package is `rsklearn`.
 
-## Installation
+## Quick Start 🚀
 
-Published wheels, once available:
+After the first PyPI release, install with:
 
 ```bash
 python -m pip install r-scikit-learn
 ```
 
-Before publishing, verify that the `r-scikit-learn` distribution name is
-available on PyPI.
-
-Build from source on macOS/Linux:
+Or build from source on macOS/Linux:
 
 ```bash
 python -m venv .venv
@@ -153,28 +153,63 @@ classifier = LogisticRegression(max_iter=500).fit(X_train, class_labels)
 probabilities = classifier.predict_proba(X_test)
 ```
 
-## Supported Inputs
+## Highlights ✨
 
-Numeric preprocessors accept non-empty two-dimensional NumPy arrays and
-array-like numeric input. Scalers compute fitted statistics as float64;
-`Normalizer` and `RobustScaler` use native float32 transform kernels when
-possible. Transforming float32 input returns float32 output; other numeric input
-returns float64 output. Supported estimators ignore NaNs while fitting and
-preserve them while transforming. Infinity is rejected.
+### Numeric Preprocessing
 
-`StandardScaler` and `MinMaxScaler` support incremental updates through
-`partial_fit`. `Normalizer` supports L1, L2, and max row normalization with
-native float32 and float64 Rust kernels. Its `copy=False` behavior is
-best-effort, matching scikit-learn's documented contract.
+- Accepts non-empty 2D NumPy arrays and numeric array-like input.
+- Uses float64 fitted statistics and native float32 kernels where supported.
+- Ignores NaNs while fitting, preserves them while transforming, and rejects
+  infinity.
+- Supports incremental `partial_fit` for `StandardScaler` and `MinMaxScaler`.
+- Supports L1, L2, and max row normalization.
+- Provides quantile-based `RobustScaler` fitting and inverse transforms.
 
-`RobustScaler` supports optional centering and scaling, custom quantile ranges,
-unit-variance scaling, inverse transforms, NaN-aware fitting, native float32
-and float64 transforms, and best-effort `copy=False`.
+### Labels And Categories
 
-`LabelEncoder` accepts one-dimensional signed integer, unsigned integer,
-floating-point, boolean, or UTF-8 string labels. Empty labels, NaN, infinity,
-and values across the full int64/uint64 ranges are supported. Integer class
-values preserve their input dtype.
+- `LabelEncoder` supports integers, floats, booleans, and UTF-8 strings.
+- `OrdinalEncoder` supports discovered or explicit categories, unknown values,
+  missing values, and infrequent-category grouping.
+- `OneHotEncoder` provides native Rust CSR construction, sparse or dense
+  output, category dropping, inverse transforms, and feature names.
+- Contiguous NumPy Unicode arrays use a fixed-width Rust codepoint pathway,
+  avoiding per-label Python string conversion in the hot path.
+
+### Imputation And Composition
+
+- `SimpleImputer` supports dense numeric and categorical input, standard and
+  callable strategies, missing indicators, inverse transforms, and feature
+  names.
+- Numeric imputation statistics and replacement use native Rust kernels.
+- `Pipeline` and `make_pipeline` support nested parameters, passthrough steps,
+  prediction, scoring, inverse transforms, and feature-name propagation.
+- `ColumnTransformer` supports named or positional column selection, remainder
+  estimators, transformer weights, and density-based dense or CSR output.
+
+### Metrics And Model Selection
+
+- Classification metrics: `accuracy_score`, `confusion_matrix`,
+  `precision_score`, `recall_score`, and `f1_score`.
+- Regression metrics: `mean_squared_error`, `mean_absolute_error`, and
+  `r2_score`.
+- Model selection: `train_test_split`, `KFold`, `StratifiedKFold`, and
+  `cross_val_score`.
+- Large reductions, weighted confusion matrices, and common split operations
+  use safe Rust kernels.
+
+### Linear Models
+
+- Dense `LinearRegression`, `Ridge`, `Lasso`, `ElasticNet`, and
+  `LogisticRegression`.
+- Safe Rust fitting kernels with NumPy's optimized BLAS path for dense
+  prediction.
+- Sample weights, intercepts, rank-deficient input, and multi-output
+  regression.
+- Shared Rust cyclic coordinate descent for `Lasso` and `ElasticNet`.
+- Binary and multiclass logistic regression, including binary L1 and
+  elastic-net fitting.
+
+### Estimator And Sparse Foundations
 
 Public estimator-author APIs are available from `rsklearn.base` and
 `rsklearn.utils.validation`. They include `BaseEstimator`, `TransformerMixin`,
@@ -189,84 +224,19 @@ Rust kernels, reconstructs validated sparse output, and provides native
 float32/float64 sparse column scaling. Existing estimators remain dense-only
 until their sparse-specific behavior is implemented.
 
-Contiguous NumPy Unicode arrays are exposed to safe Rust as fixed-width
-codepoint rows, avoiding per-label Python string conversion in the hot path.
-The internal categorical layer also provides per-feature numeric, boolean, and
-Unicode discovery and lookup kernels, exact large-integer handling, missing
-categories, unknown masks, mixed-type validation, and feature-name checks for
-categorical encoders. `OrdinalEncoder` uses this layer and supports explicit or
-automatically discovered categories, unknown and missing-value encoding,
-infrequent-category grouping, inverse transforms, and output feature names.
-`OneHotEncoder` adds native Rust CSR construction, sparse or dense output,
-category dropping, unknown handling, inverse transforms, and feature names.
-`SimpleImputer` supports dense numeric and categorical input, standard and
-callable strategies, custom missing sentinels, empty-feature handling, missing
-indicators, inverse transforms, and feature names. Numeric statistics and
-replacement use native Rust kernels. Numeric mean fitting uses a fused
-row-major pass that returns compact missing and empty-feature metadata without
-building a full Python missing mask. Sparse input is rejected until a native
-sparse imputation path is implemented.
-
-`Pipeline` and `make_pipeline` provide sequential estimator composition,
-nested parameter management, routed `step__parameter` fit arguments,
-passthrough steps, prediction and scoring delegation, inverse transforms, and
-feature-name propagation. Estimator computations remain in their existing Rust
-kernels. Pipeline caching and metadata routing are explicitly rejected until
-implemented.
-
-`ColumnTransformer` and `make_column_transformer` apply independent
-transformers to integer-, boolean-, slice-, callable-, or name-selected
-columns. They support estimator cloning, passthrough and dropped columns,
-remainder estimators, nested parameters, transformer weights, feature-name
-propagation, and density-based dense or CSR output. Parallel execution through
-`n_jobs` is explicitly rejected until implemented.
-
-`rsklearn.metrics` provides `accuracy_score`, `confusion_matrix`,
-`precision_score`, `recall_score`, `f1_score`, `mean_squared_error`,
-`mean_absolute_error`, and `r2_score`. Large-array accuracy, weighted confusion
-matrices, and multi-output regression reductions execute in safe Rust while
-Python handles label semantics, binary and multiclass averaging, and
-validation.
-
-`rsklearn.model_selection` provides `train_test_split`, `KFold`,
-`StratifiedKFold`, and `cross_val_score`. Splits preserve common Python,
-NumPy, SciPy sparse, and pandas-like input containers. Seeded shuffling is
-deterministic and compatible with scikit-learn's `RandomState` behavior.
-`cross_val_score` clones estimators for every fold, selects stratified folds
-for classifiers by default, supports estimator, callable, and common named
-metric scoring, slices sample-aligned fit parameters, and can assign a numeric
-score to failed folds. Parallel cross-validation is explicitly rejected until
-implemented.
-
-`rsklearn.linear_model` provides dense `LinearRegression`, `Ridge`, `Lasso`,
-`ElasticNet`, and `LogisticRegression`. Fitting uses safe-Rust kernels, while
-dense prediction uses NumPy's optimized BLAS path to avoid an unnecessary
-boundary crossing.
-Least-squares estimators use SVD-based solvers and support sample weights,
-intercepts, rank-deficient input, and multi-output regression.
-`Lasso` and `ElasticNet` use a shared Rust cyclic coordinate-descent solver and
-support sample weights, positive coefficients, and multi-output regression.
-`LogisticRegression` supports binary and multiclass labels with L2 or no
-regularization, plus binary L1 and elastic-net fitting through a Rust proximal
-solver. It also supports sample and class weights, probabilities, decision
-scores, convergence reporting, pipelines, and cross-validation. Sparse input,
-multiclass L1/elastic-net logistic fitting, one-vs-rest fitting, warm starts,
-random coordinate selection, and parallel estimator orchestration are
-explicitly rejected until implemented.
-
 For `StandardScaler`, `mean_` follows scikit-learn's practical behavior: it is
 available when either centering or standard-deviation scaling needs it, and is
 `None` only when both options are disabled. `var_` and `scale_` are `None`
 when `with_std=False`.
 
-## Comparison With scikit-learn
+## Compatibility
 
 The supported behavior is differential-tested against scikit-learn, including
 population variance, constant features, non-default feature ranges, clipping,
 round trips, and sorted label classes. `r-scikit-learn` is intentionally much
 smaller and does not yet claim complete estimator API compatibility.
 
-## Current Production Gaps
+## Current Production Gaps 🛠️
 
 The core implemented behavior is tested and packaged across Linux, macOS, and
 Windows, but the project remains alpha software. Before a stable 1.0 release,
@@ -283,7 +253,10 @@ the following compatibility and operational work remains:
   tuning.
 - Broader fuzz, property, memory-pressure, and long-running benchmark coverage.
 
-No performance claim is made. Run:
+## Benchmarks ⚡
+
+Performance depends on workload, hardware, input layout, and build mode. Run
+the benchmarks locally:
 
 ```bash
 maturin develop --release
