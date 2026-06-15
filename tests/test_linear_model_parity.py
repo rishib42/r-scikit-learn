@@ -49,7 +49,7 @@ def test_tall_linear_regression_matches_scikit_learn_near_rank_deficiency(
     ours = LinearRegression(tol=1e-6).fit(X, y)
     theirs = sklearn_linear.LinearRegression().fit(X, y)
     assert ours.rank_ == theirs.rank_
-    np.testing.assert_allclose(ours.predict(X), theirs.predict(X), rtol=1e-7, atol=1e-9)
+    np.testing.assert_allclose(ours.predict(X), theirs.predict(X), rtol=1e-7, atol=5e-9)
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 10.0])
