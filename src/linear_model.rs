@@ -1,4 +1,5 @@
 use crate::error::CoreError;
+use faer::{prelude::SolveLstsq, Mat, Side};
 use nalgebra::{DMatrix, DVector};
 use rayon::prelude::*;
 use wide::f64x2;
@@ -7,6 +8,14 @@ use wide::f64x2;
 pub struct LinearFit {
     pub coefficients: Vec<f64>,
     pub intercepts: Vec<f64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LinearLeastSquaresFit {
+    pub coefficients: Vec<f64>,
+    pub intercepts: Vec<f64>,
+    pub rank: usize,
+    pub singular_values: Vec<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -203,6 +212,183 @@ pub fn fit_linear(
     Ok(LinearFit {
         coefficients: row_major,
         intercepts,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn fit_linear_faer(
+    input: &[f64],
+    rows: usize,
+    columns: usize,
+    targets: &[f64],
+    outputs: usize,
+    weights: &[f64],
+    fit_intercept: bool,
+) -> Result<LinearFit, CoreError> {
+    validate_dense(input, rows, columns, targets, outputs, weights)?;
+    let weight_sum = weights.iter().sum::<f64>();
+    let uniform_weights = weights.iter().all(|weight| *weight == weights[0]);
+    let mut x_mean = vec![0.0; columns];
+    let mut y_mean = vec![0.0; outputs];
+    if fit_intercept {
+        for row in 0..rows {
+            for column in 0..columns {
+                x_mean[column] += weights[row] * input[row * columns + column];
+            }
+            for output in 0..outputs {
+                y_mean[output] += weights[row] * targets[row * outputs + output];
+            }
+        }
+        for value in &mut x_mean {
+            *value /= weight_sum;
+        }
+        for value in &mut y_mean {
+            *value /= weight_sum;
+        }
+    }
+
+    let x = Mat::from_fn(rows, columns, |row, column| {
+        let centered = input[row * columns + column] - x_mean[column];
+        if uniform_weights {
+            centered
+        } else {
+            centered * weights[row].sqrt()
+        }
+    });
+    let y = Mat::from_fn(rows, outputs, |row, output| {
+        let centered = targets[row * outputs + output] - y_mean[output];
+        if uniform_weights {
+            centered
+        } else {
+            centered * weights[row].sqrt()
+        }
+    });
+    let coefficients = x.col_piv_qr().solve_lstsq(&y);
+    if coefficients
+        .col_iter()
+        .any(|column| column.iter().any(|value| !value.is_finite()))
+    {
+        return Err(CoreError::LinearSolverFailed);
+    }
+    let mut row_major = vec![0.0; outputs * columns];
+    for output in 0..outputs {
+        for column in 0..columns {
+            row_major[output * columns + column] = coefficients[(column, output)];
+        }
+    }
+    let intercepts = (0..outputs)
+        .map(|output| {
+            y_mean[output]
+                - (0..columns)
+                    .map(|column| row_major[output * columns + column] * x_mean[column])
+                    .sum::<f64>()
+        })
+        .collect();
+    Ok(LinearFit {
+        coefficients: row_major,
+        intercepts,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn fit_linear_tall(
+    input: &[f64],
+    rows: usize,
+    columns: usize,
+    targets: &[f64],
+    outputs: usize,
+    weights: &[f64],
+    fit_intercept: bool,
+    tolerance: f64,
+) -> Result<LinearLeastSquaresFit, CoreError> {
+    validate_dense(input, rows, columns, targets, outputs, weights)?;
+    if !tolerance.is_finite() || tolerance < 0.0 || rows < columns {
+        return Err(CoreError::LinearSolverFailed);
+    }
+    let weight_sum = weights.iter().sum::<f64>();
+    let uniform_weights = weights.iter().all(|weight| *weight == weights[0]);
+    let mut x_mean = vec![0.0; columns];
+    let mut y_mean = vec![0.0; outputs];
+    if fit_intercept {
+        for row in 0..rows {
+            for column in 0..columns {
+                x_mean[column] += weights[row] * input[row * columns + column];
+            }
+            for output in 0..outputs {
+                y_mean[output] += weights[row] * targets[row * outputs + output];
+            }
+        }
+        for value in &mut x_mean {
+            *value /= weight_sum;
+        }
+        for value in &mut y_mean {
+            *value /= weight_sum;
+        }
+    }
+    let x = Mat::from_fn(rows, columns, |row, column| {
+        let value = input[row * columns + column] - x_mean[column];
+        if uniform_weights {
+            value
+        } else {
+            value * weights[row].sqrt()
+        }
+    });
+    let y = Mat::from_fn(rows, outputs, |row, output| {
+        let value = targets[row * outputs + output] - y_mean[output];
+        if uniform_weights {
+            value
+        } else {
+            value * weights[row].sqrt()
+        }
+    });
+    let gram = x.transpose() * &x;
+    let right = x.transpose() * &y;
+    let eigen = gram
+        .self_adjoint_eigen(Side::Lower)
+        .map_err(|_| CoreError::LinearSolverFailed)?;
+    let vectors = eigen.U();
+    let values = eigen.S().column_vector();
+    let largest = values[columns - 1].max(0.0);
+    let threshold = tolerance * tolerance * largest;
+    let rank = values.iter().filter(|value| **value > threshold).count();
+    let mut coefficients = vec![0.0; outputs * columns];
+    for output in 0..outputs {
+        for eigen_index in 0..columns {
+            let eigenvalue = values[eigen_index];
+            if eigenvalue <= threshold {
+                continue;
+            }
+            let projected = (0..columns)
+                .map(|column| vectors[(column, eigen_index)] * right[(column, output)])
+                .sum::<f64>()
+                / eigenvalue;
+            for column in 0..columns {
+                coefficients[output * columns + column] +=
+                    vectors[(column, eigen_index)] * projected;
+            }
+        }
+    }
+    if coefficients.iter().any(|value| !value.is_finite()) {
+        return Err(CoreError::LinearSolverFailed);
+    }
+    let intercepts = (0..outputs)
+        .map(|output| {
+            y_mean[output]
+                - (0..columns)
+                    .map(|column| coefficients[output * columns + column] * x_mean[column])
+                    .sum::<f64>()
+        })
+        .collect();
+    let singular_values = values
+        .iter()
+        .rev()
+        .map(|value| value.max(0.0).sqrt())
+        .collect();
+    Ok(LinearLeastSquaresFit {
+        coefficients,
+        intercepts,
+        rank,
+        singular_values,
     })
 }
 
@@ -773,7 +959,7 @@ fn binary_loss_gradient_serial(
 #[allow(clippy::too_many_arguments)]
 fn logistic_loss_gradient(
     input: &[f64],
-    rows: usize,
+    _rows: usize,
     columns: usize,
     labels: &[i64],
     classes: usize,
@@ -783,44 +969,64 @@ fn logistic_loss_gradient(
     regularization: f64,
 ) -> Result<(f64, Vec<f64>), CoreError> {
     let width = columns + usize::from(fit_intercept);
-    let mut loss = 0.0;
-    let mut gradient = vec![0.0; classes * width];
-    let mut scores = vec![0.0; classes];
     let weight_sum = weights.iter().sum::<f64>();
-    for row in 0..rows {
-        let label = usize::try_from(labels[row]).map_err(|_| CoreError::InvalidMetricCode)?;
-        if label >= classes {
-            return Err(CoreError::InvalidMetricCode);
-        }
-        for class in 0..classes {
-            scores[class] = (0..columns)
-                .map(|column| input[row * columns + column] * parameters[class * width + column])
-                .sum::<f64>()
-                + if fit_intercept {
-                    parameters[class * width + columns]
-                } else {
-                    0.0
-                };
-        }
-        let maximum = scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        let denominator = scores
-            .iter_mut()
-            .map(|score| {
-                *score = (*score - maximum).exp();
-                *score
-            })
-            .sum::<f64>();
-        loss -= weights[row] * (scores[label] / denominator).ln();
-        for class in 0..classes {
-            let error = weights[row] * (scores[class] / denominator - f64::from(class == label));
-            for column in 0..columns {
-                gradient[class * width + column] += error * input[row * columns + column];
+    let block_rows = (16_384 / columns.max(1)).max(256);
+    let (mut loss, mut gradient) = input
+        .par_chunks(block_rows * columns)
+        .enumerate()
+        .map(|(block, input_block)| {
+            let first_row = block * block_rows;
+            let block_len = input_block.len() / columns;
+            let mut local_loss = 0.0;
+            let mut local_gradient = vec![0.0; classes * width];
+            let mut scores = vec![0.0; classes];
+            for local_row in 0..block_len {
+                let row = first_row + local_row;
+                let label = labels[row] as usize;
+                let input_row = &input_block[local_row * columns..(local_row + 1) * columns];
+                for class in 0..classes {
+                    scores[class] = simd_dot(
+                        input_row,
+                        &parameters[class * width..class * width + columns],
+                    ) + if fit_intercept {
+                        parameters[class * width + columns]
+                    } else {
+                        0.0
+                    };
+                }
+                let maximum = scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                let denominator = scores
+                    .iter_mut()
+                    .map(|score| {
+                        *score = (*score - maximum).exp();
+                        *score
+                    })
+                    .sum::<f64>();
+                local_loss -= weights[row] * (scores[label] / denominator).ln();
+                for class in 0..classes {
+                    let error =
+                        weights[row] * (scores[class] / denominator - f64::from(class == label));
+                    simd_add_scaled(
+                        &mut local_gradient[class * width..class * width + columns],
+                        input_row,
+                        error,
+                    );
+                    if fit_intercept {
+                        local_gradient[class * width + columns] += error;
+                    }
+                }
             }
-            if fit_intercept {
-                gradient[class * width + columns] += error;
-            }
-        }
-    }
+            (local_loss, local_gradient)
+        })
+        .reduce(
+            || (0.0, vec![0.0; classes * width]),
+            |(left_loss, mut left), (right_loss, right)| {
+                left.iter_mut()
+                    .zip(right)
+                    .for_each(|(left, right)| *left += right);
+                (left_loss + right_loss, left)
+            },
+        );
     loss /= weight_sum;
     for class in 0..classes {
         for column in 0..columns {
@@ -833,6 +1039,32 @@ fn logistic_loss_gradient(
         }
     }
     Ok((loss, gradient))
+}
+
+fn lbfgs_direction(gradient: &[f64], steps: &[Vec<f64>], gradient_deltas: &[Vec<f64>]) -> Vec<f64> {
+    let mut direction = gradient.to_vec();
+    let mut alphas = Vec::with_capacity(steps.len());
+    for (step, delta) in steps.iter().zip(gradient_deltas).rev() {
+        let rho = 1.0 / simd_dot(step, delta);
+        let alpha = rho * simd_dot(step, &direction);
+        simd_add_scaled(&mut direction, delta, -alpha);
+        alphas.push(alpha);
+    }
+    if let (Some(step), Some(delta)) = (steps.last(), gradient_deltas.last()) {
+        let scale = simd_dot(step, delta) / simd_dot(delta, delta).max(f64::MIN_POSITIVE);
+        direction.iter_mut().for_each(|value| *value *= scale);
+    }
+    for ((step, delta), alpha) in steps
+        .iter()
+        .zip(gradient_deltas)
+        .zip(alphas.into_iter().rev())
+    {
+        let rho = 1.0 / simd_dot(step, delta);
+        let beta = rho * simd_dot(delta, &direction);
+        simd_add_scaled(&mut direction, step, alpha - beta);
+    }
+    direction.iter_mut().for_each(|value| *value = -*value);
+    direction
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -947,6 +1179,7 @@ pub fn fit_binary_logistic_proximal(
         || input.len() != rows * columns
         || input.iter().chain(weights).any(|value| !value.is_finite())
         || weights.iter().any(|weight| *weight < 0.0)
+        || labels.iter().any(|label| *label != 0 && *label != 1)
         || weights.iter().sum::<f64>() <= 0.0
         || !l1_regularization.is_finite()
         || l1_regularization < 0.0
@@ -1060,6 +1293,9 @@ pub fn fit_logistic(
         || weights.len() != rows
         || input.iter().chain(weights).any(|value| !value.is_finite())
         || weights.iter().any(|weight| *weight < 0.0)
+        || labels
+            .iter()
+            .any(|label| *label < 0 || *label as usize >= classes)
         || weights.iter().sum::<f64>() <= 0.0
     {
         return Err(CoreError::ShapeMismatch);
@@ -1085,37 +1321,37 @@ pub fn fit_logistic(
     let mut parameters = vec![0.0; classes * width];
     let mut converged = false;
     let mut completed = 0;
+    let mut steps: Vec<Vec<f64>> = Vec::new();
+    let mut gradient_deltas: Vec<Vec<f64>> = Vec::new();
+    let (mut loss, mut gradient) = logistic_loss_gradient(
+        input,
+        rows,
+        columns,
+        labels,
+        classes,
+        weights,
+        &parameters,
+        fit_intercept,
+        regularization,
+    )?;
     for iteration in 0..max_iterations {
-        let (loss, gradient) = logistic_loss_gradient(
-            input,
-            rows,
-            columns,
-            labels,
-            classes,
-            weights,
-            &parameters,
-            fit_intercept,
-            regularization,
-        )?;
-        let gradient_norm = gradient
-            .iter()
-            .map(|value| value * value)
-            .sum::<f64>()
-            .sqrt();
+        let gradient_norm = gradient.iter().copied().map(f64::abs).fold(0.0, f64::max);
         completed = iteration + 1;
         if gradient_norm <= tolerance {
             converged = true;
             break;
         }
+        let direction = lbfgs_direction(&gradient, &steps, &gradient_deltas);
+        let directional_derivative = simd_dot(&gradient, &direction);
         let mut step = 1.0;
-        let mut accepted = false;
+        let mut accepted = None;
         while step >= 1e-12 {
             let candidate: Vec<f64> = parameters
                 .iter()
-                .zip(&gradient)
-                .map(|(parameter, gradient)| parameter - step * gradient)
+                .zip(&direction)
+                .map(|(parameter, direction)| parameter + step * direction)
                 .collect();
-            let (candidate_loss, _) = logistic_loss_gradient(
+            let (candidate_loss, candidate_gradient) = logistic_loss_gradient(
                 input,
                 rows,
                 columns,
@@ -1126,16 +1362,36 @@ pub fn fit_logistic(
                 fit_intercept,
                 regularization,
             )?;
-            if candidate_loss <= loss - 1e-4 * step * gradient_norm * gradient_norm {
-                parameters = candidate;
-                accepted = true;
+            if candidate_loss <= loss + 1e-4 * step * directional_derivative {
+                accepted = Some((candidate, candidate_loss, candidate_gradient));
                 break;
             }
             step *= 0.5;
         }
-        if !accepted {
+        let Some((candidate, candidate_loss, candidate_gradient)) = accepted else {
             break;
+        };
+        let parameter_step: Vec<f64> = candidate
+            .iter()
+            .zip(&parameters)
+            .map(|(new, old)| new - old)
+            .collect();
+        let gradient_delta: Vec<f64> = candidate_gradient
+            .iter()
+            .zip(&gradient)
+            .map(|(new, old)| new - old)
+            .collect();
+        if simd_dot(&parameter_step, &gradient_delta) > 1e-12 {
+            if steps.len() == 10 {
+                steps.remove(0);
+                gradient_deltas.remove(0);
+            }
+            steps.push(parameter_step);
+            gradient_deltas.push(gradient_delta);
         }
+        parameters = candidate;
+        loss = candidate_loss;
+        gradient = candidate_gradient;
     }
     let mut coefficients = vec![0.0; classes * columns];
     let mut intercepts = vec![0.0; classes];

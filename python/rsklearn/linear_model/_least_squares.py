@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from scipy import linalg
 
 from rsklearn import _core
 from rsklearn.base import BaseEstimator, RegressorMixin
@@ -12,8 +13,49 @@ from rsklearn.base import BaseEstimator, RegressorMixin
 from ._base import LinearModel, validate_regression_fit
 
 
+def _fit_lstsq(
+    X: np.ndarray,
+    y: np.ndarray,
+    weights: np.ndarray,
+    fit_intercept: bool,
+    tolerance: float,
+) -> tuple[np.ndarray, np.ndarray, int, np.ndarray]:
+    """Solve unregularized least squares through a shape-aware dense backend."""
+    if X.shape[0] >= 4 * X.shape[1]:
+        return _core.linear_fit_tall(X, y, weights, fit_intercept, tolerance)
+    uniform_weights = np.all(weights == weights[0])
+    if fit_intercept:
+        if uniform_weights:
+            x_mean = X.mean(axis=0)
+            y_mean = y.mean(axis=0)
+        else:
+            x_mean = np.average(X, axis=0, weights=weights)
+            y_mean = np.average(y, axis=0, weights=weights)
+    else:
+        x_mean = np.zeros(X.shape[1], dtype=np.float64)
+        y_mean = np.zeros(y.shape[1], dtype=np.float64)
+    centered_X = X.copy()
+    centered_y = y.copy()
+    centered_X -= x_mean
+    centered_y -= y_mean
+    if not uniform_weights:
+        root_weights = np.sqrt(weights)[:, None]
+        centered_X *= root_weights
+        centered_y *= root_weights
+    coefficients, _, rank, singular = linalg.lstsq(
+        centered_X,
+        centered_y,
+        cond=tolerance,
+        check_finite=False,
+        lapack_driver="gelsd",
+    )
+    coefficients = np.asarray(coefficients.T, dtype=np.float64)
+    intercepts = y_mean - coefficients @ x_mean
+    return coefficients, np.asarray(intercepts, dtype=np.float64), rank, singular
+
+
 class LinearRegression(RegressorMixin, LinearModel, BaseEstimator):
-    """Ordinary least squares using a safe-Rust SVD solver."""
+    """Ordinary least squares using Rust tall-matrix and LAPACK fallback solvers."""
 
     _rsklearn_target_tags = {
         "required": True,
@@ -55,8 +97,8 @@ class LinearRegression(RegressorMixin, LinearModel, BaseEstimator):
         X_array, y_array, weights, self._single_output = validate_regression_fit(
             self, X, y, sample_weight
         )
-        coefficients, intercepts = _core.linear_fit(
-            X_array, y_array, weights, 0.0, self.fit_intercept
+        coefficients, intercepts, self.rank_, self.singular_ = _fit_lstsq(
+            X_array, y_array, weights, self.fit_intercept, float(self.tol)
         )
         self.coef_ = coefficients[0] if self._single_output else coefficients
         self.intercept_ = float(intercepts[0]) if self._single_output else intercepts

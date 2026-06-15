@@ -41,6 +41,12 @@ type RegressionReductionOutput<'py> = (
     f64,
 );
 type LinearFitOutput<'py> = (Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>);
+type LinearLeastSquaresOutput<'py> = (
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    usize,
+    Bound<'py, PyArray1<f64>>,
+);
 type LogisticFitOutput<'py> = (
     Bound<'py, PyArray2<f64>>,
     Bound<'py, PyArray1<f64>>,
@@ -243,6 +249,78 @@ fn linear_fit<'py>(
     Ok((
         array2_output(py, fit.coefficients, target_shape[1], shape[1])?,
         fit.intercepts.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, targets, weights, fit_intercept=true))]
+fn linear_fit_faer<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    targets: PyReadonlyArray2<'py, f64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    fit_intercept: bool,
+) -> PyResult<LinearFitOutput<'py>> {
+    let shape = input.shape();
+    let target_shape = targets.shape();
+    if shape[0] != target_shape[0] {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let input = input.as_slice()?;
+    let targets = targets.as_slice()?;
+    let weights = weights.as_slice()?;
+    let fit = py.detach(|| {
+        linear_model::fit_linear_faer(
+            input,
+            shape[0],
+            shape[1],
+            targets,
+            target_shape[1],
+            weights,
+            fit_intercept,
+        )
+    })?;
+    Ok((
+        array2_output(py, fit.coefficients, target_shape[1], shape[1])?,
+        fit.intercepts.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, targets, weights, fit_intercept=true, tolerance=1e-6))]
+fn linear_fit_tall<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    targets: PyReadonlyArray2<'py, f64>,
+    weights: PyReadonlyArray1<'py, f64>,
+    fit_intercept: bool,
+    tolerance: f64,
+) -> PyResult<LinearLeastSquaresOutput<'py>> {
+    let shape = input.shape();
+    let target_shape = targets.shape();
+    if shape[0] != target_shape[0] {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let input = input.as_slice()?;
+    let targets = targets.as_slice()?;
+    let weights = weights.as_slice()?;
+    let fit = py.detach(|| {
+        linear_model::fit_linear_tall(
+            input,
+            shape[0],
+            shape[1],
+            targets,
+            target_shape[1],
+            weights,
+            fit_intercept,
+            tolerance,
+        )
+    })?;
+    Ok((
+        array2_output(py, fit.coefficients, target_shape[1], shape[1])?,
+        fit.intercepts.into_pyarray(py),
+        fit.rank,
+        fit.singular_values.into_pyarray(py),
     ))
 }
 
@@ -1249,6 +1327,8 @@ fn label_inverse_strings(
 fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(build_profile, module)?)?;
     module.add_function(wrap_pyfunction!(linear_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(linear_fit_faer, module)?)?;
+    module.add_function(wrap_pyfunction!(linear_fit_tall, module)?)?;
     module.add_function(wrap_pyfunction!(linear_predict, module)?)?;
     module.add_function(wrap_pyfunction!(linear_all_finite, module)?)?;
     module.add_function(wrap_pyfunction!(linear_coordinate_fit, module)?)?;

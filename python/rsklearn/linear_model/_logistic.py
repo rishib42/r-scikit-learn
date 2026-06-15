@@ -25,7 +25,7 @@ except ImportError:
 
 
 class LogisticRegression(ClassifierMixin, BaseEstimator):
-    """Regularized logistic regression backed by safe Rust."""
+    """Regularized logistic regression using optimized Rust and L-BFGS solvers."""
 
     _rsklearn_target_tags = {"required": True}
 

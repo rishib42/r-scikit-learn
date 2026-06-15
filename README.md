@@ -202,13 +202,13 @@ probabilities = classifier.predict_proba(X_test)
 
 - Dense `LinearRegression`, `Ridge`, `Lasso`, `ElasticNet`, and
   `LogisticRegression`.
-- Safe Rust fitting kernels with NumPy's optimized BLAS path for dense
-  prediction.
+- Optimized LAPACK least-squares fitting, Rust regularized solvers, and NumPy's
+  BLAS path for dense prediction.
 - Sample weights, intercepts, rank-deficient input, and multi-output
   regression.
 - Shared Rust cyclic coordinate descent for `Lasso` and `ElasticNet`.
-- Binary and multiclass logistic regression, including binary L1 and
-  elastic-net fitting.
+- Binary Rust logistic solvers and BLAS-backed multiclass L-BFGS, including
+  binary L1 and elastic-net fitting.
 
 ### Estimator And Sparse Foundations
 

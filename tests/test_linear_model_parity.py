@@ -33,6 +33,25 @@ def test_linear_regression_matches_scikit_learn(fit_intercept, weighted):
     )
 
 
+@pytest.mark.parametrize("perturbation", [1e-4, 1e-6, 1e-10, 0.0])
+def test_tall_linear_regression_matches_scikit_learn_near_rank_deficiency(
+    perturbation,
+):
+    rng = np.random.default_rng(99)
+    independent = rng.normal(size=(10_000, 8))
+    dependent = (
+        independent[:, 0]
+        + 2.0 * independent[:, 1]
+        + perturbation * rng.normal(size=independent.shape[0])
+    )
+    X = np.ascontiguousarray(np.column_stack((independent, dependent)))
+    y = rng.normal(size=X.shape[0])
+    ours = LinearRegression(tol=1e-6).fit(X, y)
+    theirs = sklearn_linear.LinearRegression().fit(X, y)
+    assert ours.rank_ == theirs.rank_
+    np.testing.assert_allclose(ours.predict(X), theirs.predict(X), rtol=1e-7, atol=1e-9)
+
+
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 10.0])
 @pytest.mark.parametrize("fit_intercept", [True, False])
 def test_ridge_matches_scikit_learn_svd(alpha, fit_intercept):
@@ -58,6 +77,20 @@ def test_logistic_regression_matches_scikit_learn_predictions_and_probabilities(
     assert np.mean(ours.predict(X) == theirs.predict(X)) > 0.98
     np.testing.assert_allclose(
         ours.predict_proba(X), theirs.predict_proba(X), rtol=0.08, atol=0.04
+    )
+
+
+def test_multiclass_logistic_regression_matches_scikit_learn():
+    rng = np.random.default_rng(124)
+    X = rng.normal(size=(2_000, 12))
+    coefficients = rng.normal(size=(4, 12))
+    y = np.argmax(X @ coefficients.T + rng.normal(scale=0.5, size=(2_000, 4)), axis=1)
+    options = {"C": 0.7, "max_iter": 500, "tol": 1e-7}
+    ours = LogisticRegression(**options).fit(X, y)
+    theirs = sklearn_linear.LogisticRegression(**options).fit(X, y)
+    assert np.mean(ours.predict(X) == theirs.predict(X)) > 0.995
+    np.testing.assert_allclose(
+        ours.predict_proba(X), theirs.predict_proba(X), rtol=0.02, atol=0.01
     )
 
 

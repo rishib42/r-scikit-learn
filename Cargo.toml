@@ -26,6 +26,7 @@ name = "_core"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+faer = { version = "0.24", default-features = false, features = ["std", "rayon", "linalg"] }
 nalgebra = { version = "0.34", default-features = false, features = ["std"] }
 numpy = "0.28"
 pyo3 = { version = "0.28", features = ["auto-initialize"] }

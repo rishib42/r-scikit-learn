@@ -72,6 +72,12 @@ def main() -> None:
     y_classification = (X @ coefficients + rng.normal(size=args.samples) > 0).astype(
         np.int64
     )
+    multiclass_coefficients = rng.normal(size=(4, args.features))
+    y_multiclass = np.argmax(
+        X @ multiclass_coefficients.T
+        + rng.normal(size=(args.samples, multiclass_coefficients.shape[0])),
+        axis=1,
+    )
     print(f"Matrix: {args.samples:,} x {args.features:,}")
     report(
         "LinearRegression fit",
@@ -105,6 +111,13 @@ def main() -> None:
         "LogisticRegression fit",
         lambda: rlinear.LogisticRegression(max_iter=500).fit(X, y_classification),
         lambda: slinear.LogisticRegression(max_iter=500).fit(X, y_classification),
+        args.repetitions,
+        args.warmups,
+    )
+    report(
+        "LogisticRegression multiclass fit",
+        lambda: rlinear.LogisticRegression(max_iter=500).fit(X, y_multiclass),
+        lambda: slinear.LogisticRegression(max_iter=500).fit(X, y_multiclass),
         args.repetitions,
         args.warmups,
     )
