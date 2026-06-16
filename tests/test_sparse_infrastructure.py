@@ -127,10 +127,10 @@ def test_rust_column_scaling_preserves_sparse_format_dtype_and_input(
 
 
 def test_sparse_input_remains_rejected_by_dense_only_estimators():
-    from rsklearn.preprocessing import OrdinalEncoder, StandardScaler
+    from rsklearn.preprocessing import OrdinalEncoder
 
     matrix = sparse.csr_matrix([[0.0, 1.0], [1.0, 0.0]])
-    for estimator in (StandardScaler(), OrdinalEncoder()):
+    for estimator in (OrdinalEncoder(),):
         with pytest.raises(TypeError, match="dense data is required"):
             estimator.fit(matrix)
 

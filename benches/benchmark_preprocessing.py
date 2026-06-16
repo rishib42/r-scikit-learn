@@ -13,6 +13,7 @@ from rsklearn.base import BaseEstimator
 from rsklearn.impute import SimpleImputer
 from rsklearn.preprocessing import (
     LabelEncoder,
+    MaxAbsScaler,
     MinMaxScaler,
     Normalizer,
     OneHotEncoder,
@@ -27,6 +28,7 @@ from sklearn.impute import SimpleImputer as ScikitSimpleImputer
 
 # The scikit-learn distribution intentionally exposes the `sklearn` import package.
 from sklearn.preprocessing import LabelEncoder as ScikitLabelEncoder
+from sklearn.preprocessing import MaxAbsScaler as ScikitMaxAbsScaler
 from sklearn.preprocessing import MinMaxScaler as ScikitMinMaxScaler
 from sklearn.preprocessing import Normalizer as ScikitNormalizer
 from sklearn.preprocessing import OneHotEncoder as ScikitOneHotEncoder
@@ -88,6 +90,7 @@ def benchmark_matrix(rows: int, columns: int, repetitions: int) -> None:
     )
     for name, ours, theirs in [
         ("StandardScaler", StandardScaler, ScikitStandardScaler),
+        ("MaxAbsScaler", MaxAbsScaler, ScikitMaxAbsScaler),
         ("MinMaxScaler", MinMaxScaler, ScikitMinMaxScaler),
         ("Normalizer", Normalizer, ScikitNormalizer),
         ("RobustScaler", RobustScaler, ScikitRobustScaler),
@@ -292,6 +295,34 @@ def benchmark_sparse(repetitions: int) -> None:
         "Sparse column scaling",
         lambda: scale_sparse_columns(matrix, scale),
         scikit_scale,
+        repetitions,
+    )
+    ours_standard = StandardScaler(with_mean=False).fit(matrix)
+    theirs_standard = ScikitStandardScaler(with_mean=False).fit(matrix)
+    report_comparison(
+        "Sparse StandardScaler fit",
+        lambda: StandardScaler(with_mean=False).fit(matrix),
+        lambda: ScikitStandardScaler(with_mean=False).fit(matrix),
+        repetitions,
+    )
+    report_comparison(
+        "Sparse StandardScaler transform",
+        lambda: ours_standard.transform(matrix),
+        lambda: theirs_standard.transform(matrix),
+        repetitions,
+    )
+    ours_maxabs = MaxAbsScaler().fit(matrix)
+    theirs_maxabs = ScikitMaxAbsScaler().fit(matrix)
+    report_comparison(
+        "Sparse MaxAbsScaler fit",
+        lambda: MaxAbsScaler().fit(matrix),
+        lambda: ScikitMaxAbsScaler().fit(matrix),
+        repetitions,
+    )
+    report_comparison(
+        "Sparse MaxAbsScaler transform",
+        lambda: ours_maxabs.transform(matrix),
+        lambda: theirs_maxabs.transform(matrix),
         repetitions,
     )
 

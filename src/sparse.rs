@@ -1,5 +1,13 @@
 use crate::error::CoreError;
 
+#[derive(Debug, Clone)]
+pub struct SparseStandardStats {
+    pub mean: Vec<f64>,
+    pub variance: Vec<f64>,
+    pub scale: Vec<f64>,
+    pub counts: Vec<i64>,
+}
+
 pub fn validate_compressed<T>(
     indices: &[T],
     indptr: &[T],
@@ -35,6 +43,167 @@ where
         }
     }
     Ok(())
+}
+
+pub fn standard_stats_csr<I>(
+    values: &[f64],
+    indices: &[I],
+    rows: usize,
+    columns: usize,
+) -> Result<SparseStandardStats, CoreError>
+where
+    I: Copy + TryInto<usize>,
+{
+    if values.len() != indices.len() {
+        return Err(CoreError::InvalidSparseStructure);
+    }
+    let mut sums = vec![0.0; columns];
+    let mut squared_sums = vec![0.0; columns];
+    let mut nan_counts = vec![0_usize; columns];
+    for (&value, &index) in values.iter().zip(indices) {
+        let column = index
+            .try_into()
+            .map_err(|_| CoreError::InvalidSparseStructure)?;
+        if column >= columns {
+            return Err(CoreError::SparseIndexOutOfBounds(column, columns));
+        }
+        if value.is_nan() {
+            nan_counts[column] += 1;
+        } else {
+            sums[column] += value;
+            squared_sums[column] += value * value;
+        }
+    }
+    stats_from_sums(sums, squared_sums, nan_counts, rows)
+}
+
+pub fn standard_stats_csc<I>(
+    values: &[f64],
+    indptr: &[I],
+    rows: usize,
+    columns: usize,
+) -> Result<SparseStandardStats, CoreError>
+where
+    I: Copy + TryInto<usize>,
+{
+    if indptr.len() != columns + 1 {
+        return Err(CoreError::InvalidSparseStructure);
+    }
+    let mut sums = vec![0.0; columns];
+    let mut squared_sums = vec![0.0; columns];
+    let mut nan_counts = vec![0_usize; columns];
+    for column in 0..columns {
+        let start = indptr[column]
+            .try_into()
+            .map_err(|_| CoreError::InvalidSparseStructure)?;
+        let end = indptr[column + 1]
+            .try_into()
+            .map_err(|_| CoreError::InvalidSparseStructure)?;
+        if start > end || end > values.len() {
+            return Err(CoreError::InvalidSparseStructure);
+        }
+        for &value in &values[start..end] {
+            if value.is_nan() {
+                nan_counts[column] += 1;
+            } else {
+                sums[column] += value;
+                squared_sums[column] += value * value;
+            }
+        }
+    }
+    stats_from_sums(sums, squared_sums, nan_counts, rows)
+}
+
+fn stats_from_sums(
+    sums: Vec<f64>,
+    squared_sums: Vec<f64>,
+    nan_counts: Vec<usize>,
+    rows: usize,
+) -> Result<SparseStandardStats, CoreError> {
+    let columns = sums.len();
+    let mut mean = Vec::with_capacity(columns);
+    let mut variance = Vec::with_capacity(columns);
+    let mut scale = Vec::with_capacity(columns);
+    let mut counts = Vec::with_capacity(columns);
+    for column in 0..columns {
+        let count = rows.saturating_sub(nan_counts[column]);
+        counts.push(count as i64);
+        if count == 0 {
+            mean.push(f64::NAN);
+            variance.push(f64::NAN);
+            scale.push(f64::NAN);
+            continue;
+        }
+        let count_f64 = count as f64;
+        let column_mean = sums[column] / count_f64;
+        let mut column_variance = squared_sums[column] / count_f64 - column_mean * column_mean;
+        if column_variance < 0.0 && column_variance > -1e-12 {
+            column_variance = 0.0;
+        }
+        let column_scale = if column_variance == 0.0 || column_variance.is_nan() {
+            1.0
+        } else {
+            column_variance.sqrt()
+        };
+        mean.push(column_mean);
+        variance.push(column_variance);
+        scale.push(column_scale);
+    }
+    Ok(SparseStandardStats {
+        mean,
+        variance,
+        scale,
+        counts,
+    })
+}
+
+pub fn max_abs_csr<I>(values: &[f64], indices: &[I], columns: usize) -> Result<Vec<f64>, CoreError>
+where
+    I: Copy + TryInto<usize>,
+{
+    if values.len() != indices.len() {
+        return Err(CoreError::InvalidSparseStructure);
+    }
+    let mut max_abs = vec![0.0_f64; columns];
+    for (&value, &index) in values.iter().zip(indices) {
+        let column = index
+            .try_into()
+            .map_err(|_| CoreError::InvalidSparseStructure)?;
+        if column >= columns {
+            return Err(CoreError::SparseIndexOutOfBounds(column, columns));
+        }
+        if !value.is_nan() {
+            max_abs[column] = max_abs[column].max(value.abs());
+        }
+    }
+    Ok(max_abs)
+}
+
+pub fn max_abs_csc<I>(values: &[f64], indptr: &[I], columns: usize) -> Result<Vec<f64>, CoreError>
+where
+    I: Copy + TryInto<usize>,
+{
+    if indptr.len() != columns + 1 {
+        return Err(CoreError::InvalidSparseStructure);
+    }
+    let mut max_abs = vec![0.0_f64; columns];
+    for column in 0..columns {
+        let start = indptr[column]
+            .try_into()
+            .map_err(|_| CoreError::InvalidSparseStructure)?;
+        let end = indptr[column + 1]
+            .try_into()
+            .map_err(|_| CoreError::InvalidSparseStructure)?;
+        if start > end || end > values.len() {
+            return Err(CoreError::InvalidSparseStructure);
+        }
+        for &value in &values[start..end] {
+            if !value.is_nan() {
+                max_abs[column] = max_abs[column].max(value.abs());
+            }
+        }
+    }
+    Ok(max_abs)
 }
 
 pub fn scale_csr_columns_in_place<T, I>(

@@ -43,18 +43,26 @@ def sparse_components(
     )
     if checked.format not in ("csr", "csc"):
         checked = checked.tocsr()
+    return _components_from_checked(checked, force_int64=True)
+
+
+def _components_from_checked(
+    checked: Any, *, force_int64: bool = False
+) -> SparseComponents:
+    """Return canonical components from already type/shape-checked CSR/CSC input."""
     validate_compressed_structure(checked)
     if not checked.has_canonical_format or not checked.has_sorted_indices:
         checked = checked.copy()
         checked.sum_duplicates()
         checked.sort_indices()
     validate_compressed_structure(checked)
+    index_dtype = np.int64 if force_int64 else None
     return SparseComponents(
         checked.format,
         checked.shape,
         np.ascontiguousarray(checked.data),
-        np.ascontiguousarray(checked.indices, dtype=np.int64),
-        np.ascontiguousarray(checked.indptr, dtype=np.int64),
+        np.ascontiguousarray(checked.indices, dtype=index_dtype),
+        np.ascontiguousarray(checked.indptr, dtype=index_dtype),
     )
 
 
@@ -139,6 +147,78 @@ def scale_sparse_columns(
     return checked.tocsc(copy=False) if original_format == "csc" else checked
 
 
+def sparse_standard_stats(
+    matrix: Any,
+) -> tuple[
+    NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.int64]
+]:
+    """Return mean, variance, scale, and non-NaN counts for CSR/CSC input."""
+    components = sparse_components(
+        matrix,
+        accept_sparse=("csr", "csc"),
+        dtype=np.float64,
+        copy=False,
+        ensure_all_finite="allow-nan",
+    )
+    rows, columns = components.shape
+    if components.format == "csr":
+        suffix = "i32" if components.indices.dtype == np.dtype(np.int32) else "i64"
+        function = getattr(_core, f"sparse_standard_fit_csr_{suffix}")
+        return function(components.data, components.indices, rows, columns)
+    suffix = "i32" if components.indptr.dtype == np.dtype(np.int32) else "i64"
+    function = getattr(_core, f"sparse_standard_fit_csc_{suffix}")
+    return function(components.data, components.indptr, rows, columns)
+
+
+def sparse_standard_stats_checked(
+    matrix: Any,
+) -> tuple[
+    NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.int64]
+]:
+    """Return standardization stats for already validated CSR/CSC input."""
+    components = _components_from_checked(matrix)
+    rows, columns = components.shape
+    if components.format == "csr":
+        suffix = "i32" if components.indices.dtype == np.dtype(np.int32) else "i64"
+        function = getattr(_core, f"sparse_standard_fit_csr_{suffix}")
+        return function(components.data, components.indices, rows, columns)
+    suffix = "i32" if components.indptr.dtype == np.dtype(np.int32) else "i64"
+    function = getattr(_core, f"sparse_standard_fit_csc_{suffix}")
+    return function(components.data, components.indptr, rows, columns)
+
+
+def sparse_max_abs(matrix: Any) -> NDArray[np.float64]:
+    """Return per-feature max absolute value for CSR/CSC input."""
+    components = sparse_components(
+        matrix,
+        accept_sparse=("csr", "csc"),
+        dtype=np.float64,
+        copy=False,
+        ensure_all_finite="allow-nan",
+    )
+    columns = components.shape[1]
+    if components.format == "csr":
+        suffix = "i32" if components.indices.dtype == np.dtype(np.int32) else "i64"
+        function = getattr(_core, f"sparse_max_abs_csr_{suffix}")
+        return function(components.data, components.indices, columns)
+    suffix = "i32" if components.indptr.dtype == np.dtype(np.int32) else "i64"
+    function = getattr(_core, f"sparse_max_abs_csc_{suffix}")
+    return function(components.data, components.indptr, columns)
+
+
+def sparse_max_abs_checked(matrix: Any) -> NDArray[np.float64]:
+    """Return per-feature max absolute value for already validated CSR/CSC input."""
+    components = _components_from_checked(matrix)
+    columns = components.shape[1]
+    if components.format == "csr":
+        suffix = "i32" if components.indices.dtype == np.dtype(np.int32) else "i64"
+        function = getattr(_core, f"sparse_max_abs_csr_{suffix}")
+        return function(components.data, components.indices, columns)
+    suffix = "i32" if components.indptr.dtype == np.dtype(np.int32) else "i64"
+    function = getattr(_core, f"sparse_max_abs_csc_{suffix}")
+    return function(components.data, components.indptr, columns)
+
+
 def sparse_from_components(
     components: SparseComponents, *, canonicalize: bool = True, validate: bool = True
 ) -> Any:
@@ -191,6 +271,10 @@ def sparse_from_components(
 __all__ = [
     "SparseComponents",
     "scale_sparse_columns",
+    "sparse_max_abs",
+    "sparse_max_abs_checked",
+    "sparse_standard_stats",
+    "sparse_standard_stats_checked",
     "sparse_from_components",
     "sparse_components",
     "validate_compressed_structure",

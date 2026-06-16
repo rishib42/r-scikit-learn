@@ -10,6 +10,7 @@ from rsklearn.linear_model import (
     Ridge,
 )
 from rsklearn.preprocessing import (
+    MaxAbsScaler,
     MinMaxScaler,
     Normalizer,
     OneHotEncoder,
@@ -25,6 +26,7 @@ sklearn_checks = pytest.importorskip("sklearn.utils.estimator_checks")
     "estimator",
     [
         StandardScaler(),
+        MaxAbsScaler(),
         MinMaxScaler(),
         Normalizer(),
         OneHotEncoder(),

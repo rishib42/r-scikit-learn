@@ -5,6 +5,9 @@ published package versions are immutable.
 
 ## Unreleased
 
+- Added sparse `StandardScaler(with_mean=False)` and `MaxAbsScaler` with
+  Rust-backed CSR/CSC reductions and column scaling.
+
 ## 0.1.1 - 2026-06-15
 
 - Added wheel and source-distribution installation testing across supported

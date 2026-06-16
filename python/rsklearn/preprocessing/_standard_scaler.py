@@ -14,7 +14,8 @@ from rsklearn._validation import (
     validate_numeric_2d_with_dtype,
 )
 from rsklearn.base import BaseEstimator, TransformerMixin
-from rsklearn.utils.validation import check_is_fitted
+from rsklearn.utils import scale_sparse_columns, sparse_standard_stats_checked
+from rsklearn.utils.validation import check_is_fitted, validate_data
 
 
 class StandardScaler(TransformerMixin, BaseEstimator):
@@ -59,6 +60,39 @@ class StandardScaler(TransformerMixin, BaseEstimator):
         del y
         self._validate_params()
         already_fitted = hasattr(self, "n_features_in_")
+        if _is_sparse(X):
+            if self.with_mean:
+                raise ValueError(
+                    "Cannot center sparse matrices: pass with_mean=False instead"
+                )
+            matrix = validate_data(
+                self,
+                X,
+                reset=not already_fitted,
+                accept_sparse=("csr", "csc"),
+                dtype=np.float64,
+                ensure_all_finite="allow-nan",
+            )
+            mean, variance, scale, counts = sparse_standard_stats_checked(matrix)
+            if already_fitted:
+                mean, variance, scale, counts = _core.standard_merge_stats(
+                    self._mean_state,
+                    self._variance_state,
+                    self._counts,
+                    mean,
+                    variance,
+                    counts,
+                )
+            self._mean_state = mean
+            self._variance_state = variance
+            self._counts = counts
+            self.mean_ = mean if self.with_std else None
+            self.var_ = variance if self.with_std else None
+            self.scale_ = scale if self.with_std else None
+            self.n_samples_seen_ = (
+                int(counts[0]) if np.all(counts == counts[0]) else counts.copy()
+            )
+            return self
         array = validate_numeric_2d(X, estimator=self, reset=not already_fitted)
         if already_fitted:
             mean, variance, scale, counts = _core.standard_merge(
@@ -81,6 +115,22 @@ class StandardScaler(TransformerMixin, BaseEstimator):
         """Standardize X using fitted statistics."""
         self._validate_params()
         check_is_fitted(self, "n_features_in_")
+        if _is_sparse(X):
+            if self.with_mean:
+                raise ValueError(
+                    "Cannot center sparse matrices: pass with_mean=False instead"
+                )
+            matrix = validate_data(
+                self,
+                X,
+                reset=False,
+                accept_sparse=("csr", "csc"),
+                dtype="numeric",
+                ensure_all_finite="allow-nan",
+            )
+            if not self.with_std:
+                return matrix.copy()
+            return scale_sparse_columns(matrix, self.scale_, copy=True)
         array, output_dtype = validate_numeric_2d_with_dtype(
             X, estimator=self, reset=False
         )
@@ -95,6 +145,22 @@ class StandardScaler(TransformerMixin, BaseEstimator):
         """Undo standardization."""
         self._validate_params()
         check_is_fitted(self, "n_features_in_")
+        if _is_sparse(X):
+            if self.with_mean:
+                raise ValueError(
+                    "Cannot uncenter sparse matrices: pass with_mean=False instead"
+                )
+            matrix = validate_data(
+                self,
+                X,
+                reset=False,
+                accept_sparse=("csr", "csc"),
+                dtype="numeric",
+                ensure_all_finite="allow-nan",
+            )
+            if not self.with_std:
+                return matrix.copy()
+            return scale_sparse_columns(matrix, self.scale_, inverse=True, copy=True)
         array, output_dtype = validate_numeric_2d_with_dtype(
             X, estimator=self, reset=False
         )
@@ -108,3 +174,11 @@ class StandardScaler(TransformerMixin, BaseEstimator):
     def get_feature_names_out(self, input_features: Any = None) -> NDArray[Any]:
         """Return unchanged output feature names."""
         return one_to_one_feature_names(self, input_features)
+
+
+def _is_sparse(value: Any) -> bool:
+    try:
+        from scipy import sparse
+    except ImportError:
+        return False
+    return bool(sparse.issparse(value))

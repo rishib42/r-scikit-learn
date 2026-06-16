@@ -3,6 +3,7 @@ import pytest
 from rsklearn.impute import SimpleImputer
 from rsklearn.preprocessing import (
     LabelEncoder,
+    MaxAbsScaler,
     MinMaxScaler,
     Normalizer,
     OneHotEncoder,
@@ -14,6 +15,7 @@ from rsklearn.preprocessing import (
 # The scikit-learn distribution intentionally exposes the `sklearn` import package.
 scikit_learn_preprocessing = pytest.importorskip("sklearn.preprocessing")
 ScikitLabelEncoder = scikit_learn_preprocessing.LabelEncoder
+ScikitMaxAbsScaler = scikit_learn_preprocessing.MaxAbsScaler
 ScikitMinMaxScaler = scikit_learn_preprocessing.MinMaxScaler
 ScikitNormalizer = scikit_learn_preprocessing.Normalizer
 ScikitOneHotEncoder = scikit_learn_preprocessing.OneHotEncoder
@@ -44,6 +46,52 @@ def test_standard_scaler_parity(X, with_mean, with_std):
     np.testing.assert_allclose(ours.mean_, theirs.mean_, rtol=1e-12, atol=1e-12)
     if with_std:
         np.testing.assert_allclose(ours.var_, theirs.var_, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize("format_name", ["csr", "csc"])
+def test_standard_scaler_sparse_parity(format_name):
+    sparse = pytest.importorskip("scipy.sparse")
+    X = getattr(sparse, f"{format_name}_matrix")(
+        [[0.0, 2.0, 0.0], [4.0, 0.0, np.nan], [0.0, -2.0, 0.0]]
+    )
+    ours = StandardScaler(with_mean=False).fit(X)
+    theirs = ScikitStandardScaler(with_mean=False).fit(X)
+    np.testing.assert_allclose(ours.mean_, theirs.mean_, equal_nan=True)
+    np.testing.assert_allclose(ours.var_, theirs.var_, equal_nan=True)
+    np.testing.assert_allclose(ours.scale_, theirs.scale_, equal_nan=True)
+    np.testing.assert_allclose(
+        ours.transform(X).toarray(), theirs.transform(X).toarray(), equal_nan=True
+    )
+
+
+@pytest.mark.parametrize(
+    "X",
+    [
+        np.asarray([[0.0, 2.0, 0.0], [-4.0, 0.0, np.nan], [0.0, -8.0, 0.0]]),
+        np.asarray([[0.0], [0.0], [0.0]]),
+    ],
+)
+def test_maxabs_scaler_dense_parity(X):
+    ours = MaxAbsScaler().fit(X)
+    theirs = ScikitMaxAbsScaler().fit(X)
+    np.testing.assert_allclose(ours.max_abs_, theirs.max_abs_, equal_nan=True)
+    np.testing.assert_allclose(ours.scale_, theirs.scale_, equal_nan=True)
+    np.testing.assert_allclose(ours.transform(X), theirs.transform(X), equal_nan=True)
+
+
+@pytest.mark.parametrize("format_name", ["csr", "csc"])
+def test_maxabs_scaler_sparse_parity(format_name):
+    sparse = pytest.importorskip("scipy.sparse")
+    X = getattr(sparse, f"{format_name}_matrix")(
+        [[0.0, 2.0, 0.0], [-4.0, 0.0, np.nan], [0.0, -8.0, 0.0]]
+    )
+    ours = MaxAbsScaler().fit(X)
+    theirs = ScikitMaxAbsScaler().fit(X)
+    np.testing.assert_allclose(ours.max_abs_, theirs.max_abs_, equal_nan=True)
+    np.testing.assert_allclose(ours.scale_, theirs.scale_, equal_nan=True)
+    np.testing.assert_allclose(
+        ours.transform(X).toarray(), theirs.transform(X).toarray(), equal_nan=True
+    )
 
 
 @pytest.mark.parametrize("feature_range", [(0.0, 1.0), (-2.0, 3.0)])

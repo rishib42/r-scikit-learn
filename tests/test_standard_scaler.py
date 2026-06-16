@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 from rsklearn.preprocessing import StandardScaler
 
+sparse = pytest.importorskip("scipy.sparse")
+
 
 @pytest.mark.parametrize(
     "options",
@@ -68,3 +70,42 @@ def test_standard_scaler_params_and_repr():
         scaler.set_params(no_such_parameter=True)
     with pytest.raises(TypeError, match="must be bool"):
         StandardScaler(with_mean=1).fit([[1.0]])
+
+
+@pytest.mark.parametrize("format_name", ["csr", "csc"])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_standard_scaler_sparse_with_mean_false_preserves_format_dtype_and_roundtrips(
+    format_name, dtype
+):
+    X = getattr(sparse, f"{format_name}_matrix")(
+        np.asarray([[0.0, 2.0, 0.0], [4.0, 0.0, np.nan], [0.0, -2.0, 0.0]], dtype=dtype)
+    )
+    original = X.copy()
+    scaler = StandardScaler(with_mean=False).fit(X)
+    transformed = scaler.transform(X)
+    assert transformed.format == format_name
+    assert transformed.dtype == dtype
+    np.testing.assert_array_equal(X.toarray(), original.toarray())
+    np.testing.assert_allclose(
+        scaler.inverse_transform(transformed).toarray(),
+        X.toarray(),
+        equal_nan=True,
+        rtol=1e-6,
+        atol=1e-7,
+    )
+
+
+def test_standard_scaler_sparse_rejects_centering():
+    X = sparse.csr_matrix([[0.0, 1.0], [2.0, 0.0]])
+    with pytest.raises(ValueError, match="Cannot center sparse matrices"):
+        StandardScaler().fit(X)
+
+
+def test_standard_scaler_sparse_partial_fit_matches_complete_fit():
+    X = sparse.csr_matrix([[0.0, 2.0], [4.0, 0.0], [0.0, -2.0]])
+    incremental = StandardScaler(with_mean=False).partial_fit(X[:1]).partial_fit(X[1:])
+    complete = StandardScaler(with_mean=False).fit(X)
+    np.testing.assert_allclose(incremental.mean_, complete.mean_)
+    np.testing.assert_allclose(incremental.var_, complete.var_)
+    np.testing.assert_allclose(incremental.scale_, complete.scale_)
+    np.testing.assert_array_equal(incremental.n_samples_seen_, complete.n_samples_seen_)

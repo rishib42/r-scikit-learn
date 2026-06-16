@@ -4,6 +4,7 @@ mod categorical;
 mod error;
 mod label_encoder;
 mod linear_model;
+mod maxabs_scaler;
 mod metrics;
 mod minmax_scaler;
 mod normalizer;
@@ -25,6 +26,12 @@ type UIntArray1<'py> = Bound<'py, PyArray1<u64>>;
 type IntLabelOutput<'py> = (IntArray1<'py>, IntArray1<'py>);
 type UIntLabelOutput<'py> = (UIntArray1<'py>, IntArray1<'py>);
 type StandardFitOutput<'py> = (
+    FloatArray1<'py>,
+    FloatArray1<'py>,
+    FloatArray1<'py>,
+    Bound<'py, PyArray1<i64>>,
+);
+type SparseStandardOutput<'py> = (
     FloatArray1<'py>,
     FloatArray1<'py>,
     FloatArray1<'py>,
@@ -570,6 +577,134 @@ fn sparse_validate_i64(
 }
 
 #[pyfunction]
+fn sparse_standard_fit_csr_i32<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indices: PyReadonlyArray1<'py, i32>,
+    rows: usize,
+    columns: usize,
+) -> PyResult<SparseStandardOutput<'py>> {
+    let values = values.as_slice()?;
+    let indices = indices.as_slice()?;
+    let stats = py.detach(|| sparse::standard_stats_csr(values, indices, rows, columns))?;
+    Ok((
+        stats.mean.into_pyarray(py),
+        stats.variance.into_pyarray(py),
+        stats.scale.into_pyarray(py),
+        stats.counts.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+fn sparse_standard_fit_csr_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indices: PyReadonlyArray1<'py, i64>,
+    rows: usize,
+    columns: usize,
+) -> PyResult<SparseStandardOutput<'py>> {
+    let values = values.as_slice()?;
+    let indices = indices.as_slice()?;
+    let stats = py.detach(|| sparse::standard_stats_csr(values, indices, rows, columns))?;
+    Ok((
+        stats.mean.into_pyarray(py),
+        stats.variance.into_pyarray(py),
+        stats.scale.into_pyarray(py),
+        stats.counts.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+fn sparse_standard_fit_csc_i32<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indptr: PyReadonlyArray1<'py, i32>,
+    rows: usize,
+    columns: usize,
+) -> PyResult<SparseStandardOutput<'py>> {
+    let values = values.as_slice()?;
+    let indptr = indptr.as_slice()?;
+    let stats = py.detach(|| sparse::standard_stats_csc(values, indptr, rows, columns))?;
+    Ok((
+        stats.mean.into_pyarray(py),
+        stats.variance.into_pyarray(py),
+        stats.scale.into_pyarray(py),
+        stats.counts.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+fn sparse_standard_fit_csc_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indptr: PyReadonlyArray1<'py, i64>,
+    rows: usize,
+    columns: usize,
+) -> PyResult<SparseStandardOutput<'py>> {
+    let values = values.as_slice()?;
+    let indptr = indptr.as_slice()?;
+    let stats = py.detach(|| sparse::standard_stats_csc(values, indptr, rows, columns))?;
+    Ok((
+        stats.mean.into_pyarray(py),
+        stats.variance.into_pyarray(py),
+        stats.scale.into_pyarray(py),
+        stats.counts.into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
+fn sparse_max_abs_csr_i32<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indices: PyReadonlyArray1<'py, i32>,
+    columns: usize,
+) -> PyResult<FloatArray1<'py>> {
+    let values = values.as_slice()?;
+    let indices = indices.as_slice()?;
+    let max_abs = py.detach(|| sparse::max_abs_csr(values, indices, columns))?;
+    Ok(max_abs.into_pyarray(py))
+}
+
+#[pyfunction]
+fn sparse_max_abs_csr_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indices: PyReadonlyArray1<'py, i64>,
+    columns: usize,
+) -> PyResult<FloatArray1<'py>> {
+    let values = values.as_slice()?;
+    let indices = indices.as_slice()?;
+    let max_abs = py.detach(|| sparse::max_abs_csr(values, indices, columns))?;
+    Ok(max_abs.into_pyarray(py))
+}
+
+#[pyfunction]
+fn sparse_max_abs_csc_i32<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indptr: PyReadonlyArray1<'py, i32>,
+    columns: usize,
+) -> PyResult<FloatArray1<'py>> {
+    let values = values.as_slice()?;
+    let indptr = indptr.as_slice()?;
+    let max_abs = py.detach(|| sparse::max_abs_csc(values, indptr, columns))?;
+    Ok(max_abs.into_pyarray(py))
+}
+
+#[pyfunction]
+fn sparse_max_abs_csc_i64<'py>(
+    py: Python<'py>,
+    values: PyReadonlyArray1<'py, f64>,
+    indptr: PyReadonlyArray1<'py, i64>,
+    columns: usize,
+) -> PyResult<FloatArray1<'py>> {
+    let values = values.as_slice()?;
+    let indptr = indptr.as_slice()?;
+    let max_abs = py.detach(|| sparse::max_abs_csc(values, indptr, columns))?;
+    Ok(max_abs.into_pyarray(py))
+}
+
+#[pyfunction]
 #[pyo3(signature = (values, indices, scale, inverse=false))]
 fn sparse_scale_csr_i32_f64(
     py: Python<'_>,
@@ -705,6 +840,50 @@ fn standard_merge<'py>(
 }
 
 #[pyfunction]
+fn standard_merge_stats<'py>(
+    py: Python<'py>,
+    previous_mean: PyReadonlyArray1<'py, f64>,
+    previous_variance: PyReadonlyArray1<'py, f64>,
+    previous_counts: PyReadonlyArray1<'py, i64>,
+    batch_mean: PyReadonlyArray1<'py, f64>,
+    batch_variance: PyReadonlyArray1<'py, f64>,
+    batch_counts: PyReadonlyArray1<'py, i64>,
+) -> PyResult<StandardFitOutput<'py>> {
+    let previous_mean = previous_mean.as_slice()?;
+    let previous_variance = previous_variance.as_slice()?;
+    let previous_counts: Vec<usize> = previous_counts
+        .as_slice()?
+        .iter()
+        .map(|&value| usize::try_from(value).map_err(|_| error::CoreError::ShapeMismatch))
+        .collect::<Result<_, _>>()?;
+    let batch_counts: Vec<usize> = batch_counts
+        .as_slice()?
+        .iter()
+        .map(|&value| usize::try_from(value).map_err(|_| error::CoreError::ShapeMismatch))
+        .collect::<Result<_, _>>()?;
+    let batch = standard_scaler::StandardStats {
+        mean: batch_mean.as_slice()?.to_vec(),
+        variance: batch_variance.as_slice()?.to_vec(),
+        scale: Vec::new(),
+        counts: batch_counts,
+    };
+    let stats = py.detach(|| {
+        standard_scaler::merge(previous_mean, previous_variance, &previous_counts, &batch)
+    })?;
+    Ok((
+        stats.mean.into_pyarray(py),
+        stats.variance.into_pyarray(py),
+        stats.scale.into_pyarray(py),
+        stats
+            .counts
+            .into_iter()
+            .map(|value| value as i64)
+            .collect::<Vec<_>>()
+            .into_pyarray(py),
+    ))
+}
+
+#[pyfunction]
 #[pyo3(signature = (input, mean, scale, with_mean, with_std, inverse=false))]
 fn standard_transform<'py>(
     py: Python<'py>,
@@ -740,6 +919,49 @@ fn minmax_fit<'py>(
         stats.data_max.into_pyarray(py),
         stats.data_range.into_pyarray(py),
     ))
+}
+
+#[pyfunction]
+fn maxabs_fit<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+) -> PyResult<FloatArray1<'py>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let max_abs = py.detach(|| maxabs_scaler::fit(values, shape[0], shape[1]))?;
+    Ok(max_abs.into_pyarray(py))
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, scale, inverse=false))]
+fn maxabs_transform_f64<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f64>,
+    scale: PyReadonlyArray1<'py, f64>,
+    inverse: bool,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let scale = scale.as_slice()?;
+    let output =
+        py.detach(|| maxabs_scaler::transform_f64(values, shape[0], shape[1], scale, inverse))?;
+    array2_output(py, output, shape[0], shape[1])
+}
+
+#[pyfunction]
+#[pyo3(signature = (input, scale, inverse=false))]
+fn maxabs_transform_f32<'py>(
+    py: Python<'py>,
+    input: PyReadonlyArray2<'py, f32>,
+    scale: PyReadonlyArray1<'py, f64>,
+    inverse: bool,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let shape = input.shape();
+    let values = input.as_slice()?;
+    let scale = scale.as_slice()?;
+    let output =
+        py.detach(|| maxabs_scaler::transform_f32(values, shape[0], shape[1], scale, inverse))?;
+    array2_output_f32(py, output, shape[0], shape[1])
 }
 
 #[pyfunction]
@@ -1347,6 +1569,14 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     module.add_function(wrap_pyfunction!(sparse_validate_i32, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_validate_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_standard_fit_csr_i32, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_standard_fit_csr_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_standard_fit_csc_i32, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_standard_fit_csc_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_max_abs_csr_i32, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_max_abs_csr_i64, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_max_abs_csc_i32, module)?)?;
+    module.add_function(wrap_pyfunction!(sparse_max_abs_csc_i64, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_scale_csr_i32_f64, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_scale_csr_i64_f64, module)?)?;
     module.add_function(wrap_pyfunction!(sparse_scale_csr_i32_f32, module)?)?;
@@ -1354,7 +1584,11 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(one_hot_csr, module)?)?;
     module.add_function(wrap_pyfunction!(standard_fit, module)?)?;
     module.add_function(wrap_pyfunction!(standard_merge, module)?)?;
+    module.add_function(wrap_pyfunction!(standard_merge_stats, module)?)?;
     module.add_function(wrap_pyfunction!(standard_transform, module)?)?;
+    module.add_function(wrap_pyfunction!(maxabs_fit, module)?)?;
+    module.add_function(wrap_pyfunction!(maxabs_transform_f64, module)?)?;
+    module.add_function(wrap_pyfunction!(maxabs_transform_f32, module)?)?;
     module.add_function(wrap_pyfunction!(minmax_fit, module)?)?;
     module.add_function(wrap_pyfunction!(minmax_transform, module)?)?;
     module.add_function(wrap_pyfunction!(normalize_f64, module)?)?;

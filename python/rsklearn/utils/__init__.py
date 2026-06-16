@@ -5,6 +5,10 @@ from .sparse import (
     scale_sparse_columns,
     sparse_components,
     sparse_from_components,
+    sparse_max_abs,
+    sparse_max_abs_checked,
+    sparse_standard_stats,
+    sparse_standard_stats_checked,
     validate_compressed_structure,
 )
 from .validation import (
@@ -24,6 +28,10 @@ __all__ = [
     "scale_sparse_columns",
     "sparse_components",
     "sparse_from_components",
+    "sparse_max_abs",
+    "sparse_max_abs_checked",
+    "sparse_standard_stats",
+    "sparse_standard_stats_checked",
     "validate_compressed_structure",
     "validate_data",
 ]

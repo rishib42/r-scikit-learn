@@ -94,6 +94,13 @@ X_one_hot = encoder.fit_transform([["small"], ["large"], ["small"]])
 ```
 
 ```python
+from rsklearn.preprocessing import MaxAbsScaler, StandardScaler
+
+X_sparse_scaled = StandardScaler(with_mean=False).fit_transform(X_one_hot)
+X_sparse_maxabs = MaxAbsScaler().fit_transform(X_one_hot)
+```
+
+```python
 import numpy as np
 from rsklearn.impute import SimpleImputer
 
@@ -162,7 +169,10 @@ probabilities = classifier.predict_proba(X_test)
 - Uses float64 fitted statistics and native float32 kernels where supported.
 - Ignores NaNs while fitting, preserves them while transforming, and rejects
   infinity.
-- Supports incremental `partial_fit` for `StandardScaler` and `MinMaxScaler`.
+- Supports incremental `partial_fit` for `StandardScaler`, `MaxAbsScaler`, and
+  `MinMaxScaler`.
+- Supports CSR/CSC sparse `StandardScaler(with_mean=False)` and `MaxAbsScaler`
+  without densifying input.
 - Supports L1, L2, and max row normalization.
 - Provides quantile-based `RobustScaler` fitting and inverse transforms.
 
@@ -243,8 +253,6 @@ The core implemented behavior is tested and packaged across Linux, macOS, and
 Windows, but the project remains alpha software. Before a stable 1.0 release,
 the following compatibility and operational work remains:
 
-- Sparse-aware estimator behavior, including non-centering `StandardScaler`
-  operation. Shared CSR/CSC validation and Rust kernels are implemented.
 - `sample_weight` support for `StandardScaler.partial_fit`.
 - Comprehensive `get_feature_names_out` support and configurable output
   containers across estimators.
