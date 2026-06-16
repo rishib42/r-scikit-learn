@@ -7,6 +7,7 @@ permissions:
   contents: read
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   MATURIN_VERSION: "1.14.0"
   PACKAGING_VERSION: "26.2"
   TWINE_VERSION: "6.2.0"
@@ -16,7 +17,7 @@ jobs:
     name: Build TestPyPI distributions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
         with:
           maturin-version: ${{ env.MATURIN_VERSION }}
@@ -41,6 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
+      actions: read
+      contents: read
       id-token: write
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
