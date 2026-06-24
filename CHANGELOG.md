@@ -5,6 +5,13 @@ published package versions are immutable.
 
 ## Unreleased
 
+## 0.1.3 - 2026-06-24
+
+- Added dense brute-force `KNeighborsRegressor` with Rust-backed single-output
+  and multi-output prediction.
+- Optimized dense Euclidean nearest-neighbor search with a lazily cached
+  transposed fit matrix and operation-specific block sizes.
+
 ## 0.1.2 - 2026-06-24
 
 - Added dense brute-force `KNeighborsClassifier` with Rust-backed neighbor

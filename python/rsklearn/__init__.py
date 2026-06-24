@@ -10,7 +10,7 @@ from .base import (
 from .compose import ColumnTransformer, make_column_transformer
 from .impute import SimpleImputer
 from .linear_model import ElasticNet, Lasso, LinearRegression, LogisticRegression, Ridge
-from .neighbors import KNeighborsClassifier
+from .neighbors import KNeighborsClassifier, KNeighborsRegressor
 from .pipeline import Pipeline, make_pipeline
 from .preprocessing import (
     LabelEncoder,
@@ -28,6 +28,7 @@ __all__ = [
     "ColumnTransformer",
     "ElasticNet",
     "KNeighborsClassifier",
+    "KNeighborsRegressor",
     "LabelEncoder",
     "Lasso",
     "LinearRegression",
@@ -47,4 +48,4 @@ __all__ = [
     "make_column_transformer",
     "make_pipeline",
 ]
-__version__ = "0.1.2"
+__version__ = "0.1.3"

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from rsklearn.neighbors import KNeighborsClassifier
+from rsklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from rsklearn.utils.validation import NotFittedError
 
 
@@ -66,3 +66,47 @@ def test_too_many_neighbors_raises():
     classifier = KNeighborsClassifier(n_neighbors=3).fit([[0.0], [1.0]], [0, 1])
     with pytest.raises(ValueError, match="n_neighbors"):
         classifier.predict([[0.5]])
+
+
+def test_kneighbors_regressor_predicts_single_output_average():
+    X = np.asarray([[0.0], [2.0], [10.0], [12.0]])
+    y = np.asarray([0.0, 2.0, 10.0, 12.0])
+    regressor = KNeighborsRegressor(n_neighbors=2).fit(X, y)
+    prediction = regressor.predict([[1.0], [11.0]])
+    np.testing.assert_allclose(prediction, [1.0, 11.0])
+    assert prediction.ndim == 1
+
+
+def test_kneighbors_regressor_predicts_multioutput_targets():
+    X = np.asarray([[0.0], [2.0], [10.0], [12.0]])
+    y = np.asarray([[0.0, 0.0], [2.0, 4.0], [10.0, 20.0], [12.0, 24.0]])
+    regressor = KNeighborsRegressor(n_neighbors=2).fit(X, y)
+    prediction = regressor.predict([[1.0], [11.0]])
+    np.testing.assert_allclose(prediction, [[1.0, 2.0], [11.0, 22.0]])
+    assert prediction.ndim == 2
+
+
+def test_kneighbors_regressor_distance_weighting_uses_exact_matches():
+    X = np.asarray([[0.0], [0.0], [10.0]])
+    y = np.asarray([0.0, 2.0, 100.0])
+    regressor = KNeighborsRegressor(n_neighbors=3, weights="distance").fit(X, y)
+    np.testing.assert_allclose(regressor.predict([[0.0]]), [1.0])
+
+
+def test_kneighbors_regressor_manhattan_metric_predicts_expected_value():
+    X = np.asarray([[0.0, 0.0], [2.0, 2.0], [10.0, 10.0]])
+    regressor = KNeighborsRegressor(n_neighbors=1, metric="manhattan", p=1).fit(
+        X, [0.0, 2.0, 10.0]
+    )
+    np.testing.assert_allclose(regressor.predict([[9.0, 10.0]]), [10.0])
+
+
+def test_kneighbors_regressor_rejects_invalid_targets_and_unfitted_predict():
+    with pytest.raises(TypeError, match="regression targets"):
+        KNeighborsRegressor().fit([[0.0], [1.0]], ["a", "b"])
+    with pytest.raises(ValueError, match="one- or two-dimensional"):
+        KNeighborsRegressor().fit([[0.0], [1.0]], np.zeros((2, 1, 1)))
+    with pytest.raises(ValueError, match="finite"):
+        KNeighborsRegressor().fit([[0.0], [1.0]], [0.0, np.nan])
+    with pytest.raises(NotFittedError):
+        KNeighborsRegressor().predict([[0.0]])

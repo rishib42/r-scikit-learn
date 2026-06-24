@@ -374,10 +374,12 @@ fn neighbor_weights(weights: u8) -> Result<neighbors::WeightMode, error::CoreErr
 }
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 fn knn_kneighbors<'py>(
     py: Python<'py>,
     query: PyReadonlyArray2<'py, f64>,
     train: PyReadonlyArray2<'py, f64>,
+    train_transposed: PyReadonlyArray2<'py, f64>,
     train_norms: PyReadonlyArray1<'py, f64>,
     k: usize,
     metric: u8,
@@ -385,17 +387,26 @@ fn knn_kneighbors<'py>(
 ) -> PyResult<NeighborOutput<'py>> {
     let query_shape = query.shape();
     let train_shape = train.shape();
+    let train_transposed_shape = train_transposed.shape();
     if query_shape[1] != train_shape[1] {
         return Err(error::CoreError::ShapeMismatch.into());
     }
     let query = query.as_slice()?;
     let train = train.as_slice()?;
+    let train_transposed = train_transposed.as_slice()?;
     let train_norms = train_norms.as_slice()?;
     let metric = neighbor_metric(metric)?;
+    if matches!(metric, neighbors::DistanceMetric::Euclidean)
+        && (train_transposed_shape[0] != train_shape[1]
+            || train_transposed_shape[1] != train_shape[0])
+    {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
     let (distances, indices) = py.detach(|| {
         neighbors::kneighbors(
             query,
             train,
+            train_transposed,
             train_norms,
             query_shape[0],
             train_shape[0],
@@ -429,6 +440,7 @@ fn knn_predict_proba<'py>(
     py: Python<'py>,
     query: PyReadonlyArray2<'py, f64>,
     train: PyReadonlyArray2<'py, f64>,
+    train_transposed: PyReadonlyArray2<'py, f64>,
     train_norms: PyReadonlyArray1<'py, f64>,
     labels: PyReadonlyArray1<'py, i64>,
     k: usize,
@@ -438,19 +450,28 @@ fn knn_predict_proba<'py>(
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     let query_shape = query.shape();
     let train_shape = train.shape();
+    let train_transposed_shape = train_transposed.shape();
     if query_shape[1] != train_shape[1] {
         return Err(error::CoreError::ShapeMismatch.into());
     }
     let query = query.as_slice()?;
     let train = train.as_slice()?;
+    let train_transposed = train_transposed.as_slice()?;
     let train_norms = train_norms.as_slice()?;
     let labels = labels.as_slice()?;
     let metric = neighbor_metric(metric)?;
     let weights = neighbor_weights(weights)?;
+    if matches!(metric, neighbors::DistanceMetric::Euclidean)
+        && (train_transposed_shape[0] != train_shape[1]
+            || train_transposed_shape[1] != train_shape[0])
+    {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
     let output = py.detach(|| {
         neighbors::predict_proba(
             query,
             train,
+            train_transposed,
             train_norms,
             labels,
             query_shape[0],
@@ -471,6 +492,7 @@ fn knn_predict<'py>(
     py: Python<'py>,
     query: PyReadonlyArray2<'py, f64>,
     train: PyReadonlyArray2<'py, f64>,
+    train_transposed: PyReadonlyArray2<'py, f64>,
     train_norms: PyReadonlyArray1<'py, f64>,
     labels: PyReadonlyArray1<'py, i64>,
     k: usize,
@@ -480,19 +502,28 @@ fn knn_predict<'py>(
 ) -> PyResult<Bound<'py, PyArray1<i64>>> {
     let query_shape = query.shape();
     let train_shape = train.shape();
+    let train_transposed_shape = train_transposed.shape();
     if query_shape[1] != train_shape[1] {
         return Err(error::CoreError::ShapeMismatch.into());
     }
     let query = query.as_slice()?;
     let train = train.as_slice()?;
+    let train_transposed = train_transposed.as_slice()?;
     let train_norms = train_norms.as_slice()?;
     let labels = labels.as_slice()?;
     let metric = neighbor_metric(metric)?;
     let weights = neighbor_weights(weights)?;
+    if matches!(metric, neighbors::DistanceMetric::Euclidean)
+        && (train_transposed_shape[0] != train_shape[1]
+            || train_transposed_shape[1] != train_shape[0])
+    {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
     let output = py.detach(|| {
         neighbors::predict(
             query,
             train,
+            train_transposed,
             train_norms,
             labels,
             query_shape[0],
@@ -505,6 +536,58 @@ fn knn_predict<'py>(
         )
     })?;
     Ok(output.into_pyarray(py))
+}
+
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn knn_predict_regression<'py>(
+    py: Python<'py>,
+    query: PyReadonlyArray2<'py, f64>,
+    train: PyReadonlyArray2<'py, f64>,
+    train_transposed: PyReadonlyArray2<'py, f64>,
+    train_norms: PyReadonlyArray1<'py, f64>,
+    targets: PyReadonlyArray2<'py, f64>,
+    k: usize,
+    metric: u8,
+    weights: u8,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let query_shape = query.shape();
+    let train_shape = train.shape();
+    let train_transposed_shape = train_transposed.shape();
+    let target_shape = targets.shape();
+    if query_shape[1] != train_shape[1] || target_shape[0] != train_shape[0] {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let query = query.as_slice()?;
+    let train = train.as_slice()?;
+    let train_transposed = train_transposed.as_slice()?;
+    let train_norms = train_norms.as_slice()?;
+    let targets = targets.as_slice()?;
+    let metric = neighbor_metric(metric)?;
+    let weights = neighbor_weights(weights)?;
+    if matches!(metric, neighbors::DistanceMetric::Euclidean)
+        && (train_transposed_shape[0] != train_shape[1]
+            || train_transposed_shape[1] != train_shape[0])
+    {
+        return Err(error::CoreError::ShapeMismatch.into());
+    }
+    let output = py.detach(|| {
+        neighbors::predict_regression(
+            query,
+            train,
+            train_transposed,
+            train_norms,
+            targets,
+            query_shape[0],
+            train_shape[0],
+            query_shape[1],
+            k,
+            target_shape[1],
+            metric,
+            weights,
+        )
+    })?;
+    array2_output(py, output, query_shape[0], target_shape[1])
 }
 
 #[pyfunction]
@@ -1708,6 +1791,7 @@ fn _core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(knn_kneighbors, module)?)?;
     module.add_function(wrap_pyfunction!(knn_predict, module)?)?;
     module.add_function(wrap_pyfunction!(knn_predict_proba, module)?)?;
+    module.add_function(wrap_pyfunction!(knn_predict_regression, module)?)?;
     module.add_function(wrap_pyfunction!(knn_row_norms, module)?)?;
     module.add_function(wrap_pyfunction!(linear_coordinate_fit, module)?)?;
     module.add_function(wrap_pyfunction!(linear_coordinate_fit_validated, module)?)?;

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from rsklearn.neighbors import KNeighborsClassifier
+from rsklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 
 sklearn_neighbors = pytest.importorskip("sklearn.neighbors")
 
@@ -42,6 +42,52 @@ def test_kneighbors_training_query_matches_scikit_learn_self_exclusion():
     y = np.asarray([0, 0, 1, 1])
     ours = KNeighborsClassifier(n_neighbors=2, algorithm="brute").fit(X, y)
     theirs = sklearn_neighbors.KNeighborsClassifier(
+        n_neighbors=2, algorithm="brute"
+    ).fit(X, y)
+    ours_distances, ours_indices = ours.kneighbors()
+    their_distances, their_indices = theirs.kneighbors()
+    np.testing.assert_allclose(ours_distances, their_distances)
+    np.testing.assert_array_equal(ours_indices, their_indices)
+
+
+@pytest.mark.parametrize("weights", ["uniform", "distance"])
+@pytest.mark.parametrize(
+    ("metric", "p"),
+    [
+        ("minkowski", 2),
+        ("minkowski", 1),
+        ("euclidean", 2),
+        ("manhattan", 1),
+    ],
+)
+@pytest.mark.parametrize("multioutput", [False, True])
+def test_kneighbors_regressor_matches_scikit_learn(metric, p, weights, multioutput):
+    rng = np.random.default_rng(20260624)
+    X = rng.normal(size=(80, 5))
+    base_y = rng.normal(size=80)
+    y = np.column_stack([base_y, base_y**2 - 0.5]) if multioutput else base_y
+    query = rng.normal(size=(12, 5))
+    options = {
+        "n_neighbors": 5,
+        "weights": weights,
+        "algorithm": "brute",
+        "metric": metric,
+        "p": p,
+    }
+    ours = KNeighborsRegressor(**options).fit(X, y)
+    theirs = sklearn_neighbors.KNeighborsRegressor(**options).fit(X, y)
+    np.testing.assert_allclose(ours.predict(query), theirs.predict(query))
+    ours_distances, ours_indices = ours.kneighbors(query)
+    their_distances, their_indices = theirs.kneighbors(query)
+    np.testing.assert_allclose(ours_distances, their_distances)
+    np.testing.assert_array_equal(ours_indices, their_indices)
+
+
+def test_kneighbors_regressor_training_query_matches_scikit_learn_self_exclusion():
+    X = np.asarray([[0.0], [2.0], [5.0], [9.0]])
+    y = np.asarray([0.0, 2.0, 5.0, 9.0])
+    ours = KNeighborsRegressor(n_neighbors=2, algorithm="brute").fit(X, y)
+    theirs = sklearn_neighbors.KNeighborsRegressor(
         n_neighbors=2, algorithm="brute"
     ).fit(X, y)
     ours_distances, ours_indices = ours.kneighbors()

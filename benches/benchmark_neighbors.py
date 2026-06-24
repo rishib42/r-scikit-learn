@@ -40,8 +40,8 @@ def report(
     theirs_mean, theirs_stdev = measure(theirs, repetitions, warmups)
     improvement = (theirs_mean - ours_mean) / theirs_mean * 100
     print(
-        f"{name:<32} r-scikit-learn {ours_mean:9.6f}s ± {ours_stdev:9.6f}s  "
-        f"scikit-learn {theirs_mean:9.6f}s ± {theirs_stdev:9.6f}s  "
+        f"{name:<32} rsklearn {ours_mean:9.6f}s ± {ours_stdev:9.6f}s  "
+        f"sklearn {theirs_mean:9.6f}s ± {theirs_stdev:9.6f}s  "
         f"impr. {improvement:+7.2f}%"
     )
 
@@ -78,6 +78,7 @@ def main() -> None:
     X_train = rng.normal(size=(args.train_samples, args.features))
     X_query = rng.normal(size=(args.query_samples, args.features))
     y = rng.integers(0, args.classes, size=args.train_samples, dtype=np.int64)
+    y_regression = rng.normal(size=args.train_samples)
     options = {
         "n_neighbors": args.neighbors,
         "weights": "uniform",
@@ -115,6 +116,33 @@ def main() -> None:
         "KNeighborsClassifier proba",
         lambda: ours.predict_proba(X_query),
         lambda: theirs.predict_proba(X_query),
+        args.repetitions,
+        args.warmups,
+    )
+    report(
+        "KNeighborsRegressor fit",
+        lambda: rneighbors.KNeighborsRegressor(**options).fit(X_train, y_regression),
+        lambda: sneighbors.KNeighborsRegressor(**options).fit(X_train, y_regression),
+        args.repetitions,
+        args.warmups,
+    )
+    ours_regressor = rneighbors.KNeighborsRegressor(**options).fit(
+        X_train, y_regression
+    )
+    theirs_regressor = sneighbors.KNeighborsRegressor(**options).fit(
+        X_train, y_regression
+    )
+    report(
+        "KNeighborsRegressor kneighbors",
+        lambda: ours_regressor.kneighbors(X_query),
+        lambda: theirs_regressor.kneighbors(X_query),
+        args.repetitions,
+        args.warmups,
+    )
+    report(
+        "KNeighborsRegressor predict",
+        lambda: ours_regressor.predict(X_query),
+        lambda: theirs_regressor.predict(X_query),
         args.repetitions,
         args.warmups,
     )
