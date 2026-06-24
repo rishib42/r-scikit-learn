@@ -5,6 +5,15 @@ published package versions are immutable.
 
 ## Unreleased
 
+## 0.1.2 - 2026-06-24
+
+- Added dense brute-force `KNeighborsClassifier` with Rust-backed neighbor
+  search, class voting, `predict`, `predict_proba`, and `kneighbors`.
+- Added scikit-learn parity tests and benchmarks for nearest-neighbor
+  classification.
+- Optimized the dense Euclidean neighbor search path with blocked dot products,
+  reusable work buffers, and macOS Accelerate/CBLAS acceleration with a portable
+  `matrixmultiply` fallback.
 - Added sparse `StandardScaler(with_mean=False)` and `MaxAbsScaler` with
   Rust-backed CSR/CSC reductions and column scaling.
 

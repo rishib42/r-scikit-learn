@@ -1,6 +1,6 @@
 [package]
 name = "r-scikit-learn-core"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "Rust computational core for r-scikit-learn"
@@ -28,6 +28,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 faer = { version = "0.24", default-features = false, features = ["std", "rayon", "linalg"] }
+matrixmultiply = "0.3"
 nalgebra = { version = "0.34", default-features = false, features = ["std"] }
 numpy = "0.28"
 pyo3 = "0.28"

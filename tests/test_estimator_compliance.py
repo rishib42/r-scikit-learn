@@ -9,6 +9,7 @@ from rsklearn.linear_model import (
     LogisticRegression,
     Ridge,
 )
+from rsklearn.neighbors import KNeighborsClassifier
 from rsklearn.preprocessing import (
     MaxAbsScaler,
     MinMaxScaler,
@@ -38,6 +39,7 @@ sklearn_checks = pytest.importorskip("sklearn.utils.estimator_checks")
         Lasso(),
         ElasticNet(),
         LogisticRegression(max_iter=500),
+        KNeighborsClassifier(n_neighbors=1),
     ],
 )
 def test_scaler_passes_scikit_learn_estimator_checks(estimator):
